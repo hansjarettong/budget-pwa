@@ -25,7 +25,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // 3. Service Worker Registration (Offline Caching)
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('PWA ServiceWorker registered with scope:', reg.scope))
+      .then(reg => {
+        console.log('PWA ServiceWorker registered with scope:', reg.scope);
+        // Proactively check for Service Worker updates on launch
+        if (typeof reg.update === 'function') {
+          reg.update().catch(() => {});
+        }
+      })
       .catch(err => console.log('ServiceWorker registration skipped/failed:', err));
   }
 

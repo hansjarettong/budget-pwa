@@ -2,7 +2,7 @@
   "name": "Budget Tracker",
   "short_name": "Budget",
   "description": "Simple category budget tracker with visual limits",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "id": "budget-tracker-pwa",
   "display": "standalone",

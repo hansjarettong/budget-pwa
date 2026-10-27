@@ -1,0 +1,43 @@
+{
+  "name": "Budget Tracker",
+  "short_name": "Budget",
+  "description": "Simple category budget tracker with visual limits",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "budget-tracker-pwa",
+  "display": "standalone",
+  "background_color": "#F2F2F7",
+  "theme_color": "#007AFF",
+  "orientation": "portrait",
+  "categories": [
+    "finance",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

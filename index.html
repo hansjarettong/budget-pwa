@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Budget Tracker</title>
+
+  <!-- PWA & iOS Safari Meta Tags -->
+  <meta name="application-name" content="Budget">
+  <meta name="apple-mobile-web-app-title" content="Budget">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#007AFF" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Simple category budget tracker with visual monthly limits">
+
+  <!-- Manifest & Icons -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon.png">
+  <link rel="icon" type="image/x-icon" href="./icons/favicon.ico">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="./css/app.css">
+  <link rel="stylesheet" href="./css/components.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top iOS Navigation Bar -->
+    <header class="app-header">
+      <h1 class="app-title">Budget Tracker</h1>
+      <button class="header-action-btn" id="btnHeaderAction" onclick="document.getElementById('fabQuickAdd').click()">+ Add</button>
+    </header>
+
+    <!-- Main Views Container -->
+    <main class="main-content">
+      <!-- 1. Dashboard View (Default) -->
+      <section id="view-dashboard" class="view-section active">
+        <!-- Month Navigation -->
+        <div id="monthSelectorContainer"></div>
+
+        <!-- Monthly Summary Overview -->
+        <div id="summaryCardContainer"></div>
+
+        <!-- Category Budgets with Live Consumption Bars -->
+        <div class="section-title-wrap">
+          <div>
+            <h2 class="section-title">Category Budgets</h2>
+            <p class="section-subtitle">Real-time monthly consumption</p>
+          </div>
+          <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Tap to log</span>
+        </div>
+        <div id="categoryCardsContainer"></div>
+      </section>
+
+      <!-- 2. History View -->
+      <section id="view-history" class="view-section">
+        <div id="historyMonthSelectorContainer"></div>
+        <div class="section-title-wrap">
+          <h2 class="section-title">Expense History</h2>
+          <span class="section-subtitle">Grouped by date</span>
+        </div>
+        <div id="historyContainer"></div>
+      </section>
+
+      <!-- 3. Categories & Limits Manager -->
+      <section id="view-categories" class="view-section">
+        <div class="section-title-wrap">
+          <div>
+            <h2 class="section-title">Category Limits</h2>
+            <p class="section-subtitle">Set monthly limits once, track effortlessly</p>
+          </div>
+        </div>
+        <div id="categoriesManagerContainer"></div>
+      </section>
+
+      <!-- 4. Settings & Backups -->
+      <section id="view-settings" class="view-section">
+        <div class="section-title-wrap">
+          <h2 class="section-title">Settings & Data</h2>
+          <span class="section-subtitle">100% stored on your device</span>
+        </div>
+
+        <div class="settings-section-card">
+          <h3 class="settings-card-title">Display Currency</h3>
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 10px;">
+            Choose your preferred currency for expense tracking, monthly limits, and reports.
+          </p>
+          <select id="selectCurrency" class="sheet-input-field" style="cursor: pointer; font-size: 15px; font-weight: 600;">
+          </select>
+        </div>
+
+        <div class="settings-section-card">
+          <h3 class="settings-card-title">Data Backup & Export</h3>
+          <div class="settings-btn-group">
+            <button class="settings-btn" id="btnExportJSON">
+              <span>Backup Data (JSON)</span>
+              <span>💾</span>
+            </button>
+            <button class="settings-btn" id="btnExportCSV">
+              <span>Export Expenses (CSV)</span>
+              <span>📊</span>
+            </button>
+            <button class="settings-btn" id="btnImportJSON">
+              <span>Restore from Backup (JSON)</span>
+              <span>📂</span>
+            </button>
+            <input type="file" id="fileImportInput" accept=".json" style="display: none;">
+          </div>
+        </div>
+
+        <div class="settings-section-card">
+          <h3 class="settings-card-title">iPhone Installation Tips</h3>
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
+            To install this app on your iPhone:
+          </p>
+          <ol style="font-size: 13px; color: var(--text-secondary); padding-left: 20px; line-height: 1.6;">
+            <li>Open this URL in Safari on your iPhone</li>
+            <li>Tap the <strong>Share</strong> button (box with upward arrow)</li>
+            <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+            <li>Launch it directly from your home screen as a standalone app!</li>
+          </ol>
+        </div>
+
+        <div class="settings-section-card">
+          <h3 class="settings-card-title" style="color: var(--accent-red);">Reset Application</h3>
+          <button class="settings-btn btn-danger" id="btnResetData">
+            <span>Reset to Default 10 Categories</span>
+            <span>⚠️</span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Floating Action Button for Quick Add (+) -->
+    <button class="fab-quick-add" id="fabQuickAdd" aria-label="Add Expense">+</button>
+
+    <!-- Bottom Tab Navigation Bar -->
+    <nav class="bottom-tab-bar">
+      <button class="tab-item active" data-tab="dashboard">
+        <span class="tab-icon">📊</span>
+        <span class="tab-label">Dashboard</span>
+      </button>
+      <button class="tab-item" data-tab="history">
+        <span class="tab-icon">📝</span>
+        <span class="tab-label">History</span>
+      </button>
+      <button class="tab-item" data-tab="categories">
+        <span class="tab-icon">🏷️</span>
+        <span class="tab-label">Limits</span>
+      </button>
+      <button class="tab-item" data-tab="settings">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-label">Settings</span>
+      </button>
+    </nav>
+
+    <!-- Quick Add Bottom Sheet Modal (MoneyNote style) -->
+    <div class="modal-overlay" id="quickAddModal">
+      <div class="bottom-sheet">
+        <div class="sheet-handle-bar"></div>
+        <div class="sheet-header">
+          <h3 class="sheet-title">Log Expense</h3>
+          <button class="sheet-close-btn" id="btnQuickAddClose" aria-label="Close">✕</button>
+        </div>
+
+        <!-- Large Keypad Amount Display -->
+        <div class="amount-display-box">
+          <div class="amount-label">Amount Spent</div>
+          <div class="amount-number-row">
+            <span class="currency-symbol" id="quickAddCurrencySymbol">$</span>
+            <span class="amount-value" id="numpadAmountDisplay">0</span>
+          </div>
+        </div>
+
+        <!-- Category Selector Chips -->
+        <div class="category-chips-header">
+          <span class="category-chips-title">Select Category</span>
+        </div>
+        <div class="category-chips-scroll" id="quickAddChipsContainer"></div>
+
+        <!-- Optional Date & Note Row -->
+        <div class="sheet-meta-row">
+          <input type="date" class="sheet-input-field" id="expenseDateInput">
+          <input type="text" class="sheet-input-field" id="expenseNoteInput" placeholder="Note (optional)" maxlength="50">
+        </div>
+
+        <!-- Tactile Calculator Keypad -->
+        <div class="numpad-grid">
+          <button class="numpad-key" data-digit="1">1</button>
+          <button class="numpad-key" data-digit="2">2</button>
+          <button class="numpad-key" data-digit="3">3</button>
+          <button class="numpad-key" data-digit="4">4</button>
+          <button class="numpad-key" data-digit="5">5</button>
+          <button class="numpad-key" data-digit="6">6</button>
+          <button class="numpad-key" data-digit="7">7</button>
+          <button class="numpad-key" data-digit="8">8</button>
+          <button class="numpad-key" data-digit="9">9</button>
+          <button class="numpad-key key-action" data-action="decimal">.</button>
+          <button class="numpad-key" data-digit="0">0</button>
+          <button class="numpad-key key-action" data-action="backspace">⌫</button>
+        </div>
+
+        <button class="sheet-submit-btn" id="btnSaveExpense">Save Expense</button>
+      </div>
+    </div>
+
+    <!-- Category Limit Edit Modal -->
+    <div class="modal-overlay" id="categoryEditModal">
+      <div class="bottom-sheet">
+        <div class="sheet-handle-bar"></div>
+        <div class="sheet-header">
+          <h3 class="sheet-title" id="categoryEditModalTitle">Edit Category Budget Limit</h3>
+          <button class="sheet-close-btn" id="btnCategoryEditClose" aria-label="Close">✕</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+          <div>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Category Name</label>
+            <input type="text" class="sheet-input-field" id="editCategoryName" placeholder="e.g. Dining Out">
+          </div>
+          <div style="display: grid; grid-template-columns: 80px 1fr; gap: 10px;">
+            <div>
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Icon / Emoji</label>
+              <input type="text" class="sheet-input-field" id="editCategoryIcon" placeholder="🍔" maxlength="2" style="text-align: center; font-size: 20px;">
+            </div>
+            <div>
+              <label id="editCategoryLimitLabel" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Monthly Limit ($)</label>
+              <input type="number" class="sheet-input-field" id="editCategoryLimit" placeholder="400" min="0" step="10">
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Theme Color</label>
+            <input type="color" class="sheet-input-field" id="editCategoryColor" value="#007AFF" style="height: 44px; padding: 4px; cursor: pointer;">
+          </div>
+        </div>
+
+        <button class="sheet-submit-btn" id="btnSaveCategory">Save Budget Limit</button>
+        <button type="button" class="sheet-delete-btn" id="btnDeleteCategory" style="display: none;">Delete Category</button>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
+  </div>
+
+  <!-- Application Logic Scripts -->
+  <script src="./js/calculations.js"></script>
+  <script src="./js/store.js"></script>
+  <script src="./js/numpad.js"></script>
+  <script src="./js/ui.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
+

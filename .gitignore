@@ -1,0 +1,35 @@
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor & IDE Directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# Logs & Environment
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+
+# Dependency directories (if npm tools are added in the future)
+node_modules/
+
+# Local backup / test exports (keep your real personal financial backups out of git)
+*.csv
+*backup*.json
+scratch/
+

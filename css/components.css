@@ -1,0 +1,909 @@
+/* ==========================================================================
+   components.css - UI Components: Cards, Progress Bars, Numpad, Modals
+   ========================================================================== */
+
+/* ==========================================================================
+   1. Month Selector Bar
+   ========================================================================== */
+.month-selector-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--card-bg);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 0.5px solid var(--card-border);
+}
+
+.month-nav-btn {
+  background: var(--bg-primary);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.month-nav-btn:active {
+  transform: scale(0.9);
+  background-color: var(--bg-tertiary);
+}
+
+.month-title-wrap {
+  text-align: center;
+}
+
+.month-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.month-today-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  background: var(--accent-blue-subtle);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   2. Monthly Summary Overview Card
+   ========================================================================== */
+.summary-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-md);
+  border: 0.5px solid var(--card-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+}
+
+.summary-card.status-warning::before {
+  background: linear-gradient(90deg, var(--accent-orange), #FFCC00);
+}
+
+.summary-card.status-danger::before {
+  background: linear-gradient(90deg, var(--accent-red), #FF453A);
+}
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.summary-label {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.summary-spent-amount {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.summary-limit-subtext {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.summary-status-pill {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  text-align: right;
+}
+
+.summary-status-pill.safe {
+  background-color: var(--accent-green-subtle);
+  color: var(--accent-green);
+}
+
+.summary-status-pill.warning {
+  background-color: var(--accent-orange-subtle);
+  color: var(--accent-orange);
+}
+
+.summary-status-pill.danger {
+  background-color: var(--accent-red-subtle);
+  color: var(--accent-red);
+}
+
+/* Master Progress Bar */
+.progress-bar-container {
+  width: 100%;
+  height: 10px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 14px 0 12px 0;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.3s ease;
+}
+
+.progress-bar-fill.safe {
+  background-color: var(--accent-green);
+}
+
+.progress-bar-fill.warning {
+  background-color: var(--accent-orange);
+}
+
+.progress-bar-fill.danger {
+  background-color: var(--accent-red);
+}
+
+.summary-footer-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.stat-item-label {
+  color: var(--text-secondary);
+}
+
+.stat-item-value {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-item-value.positive {
+  color: var(--accent-green);
+}
+
+.stat-item-value.negative {
+  color: var(--accent-red);
+}
+
+/* ==========================================================================
+   3. Category Budget Progress Cards (Focal Feature)
+   ========================================================================== */
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.categories-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.category-budget-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  border: 0.5px solid var(--card-border);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  position: relative;
+  cursor: pointer;
+}
+
+.category-budget-card:active {
+  transform: scale(0.985);
+  box-shadow: none;
+}
+
+.category-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.category-info-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.category-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.category-name-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.category-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
+}
+
+.category-spending-fraction {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+.category-spending-fraction .spent-bold {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.category-badge-percent {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+}
+
+.category-badge-percent.safe {
+  background: var(--accent-green-subtle);
+  color: var(--accent-green);
+}
+
+.category-badge-percent.warning {
+  background: var(--accent-orange-subtle);
+  color: var(--accent-orange);
+}
+
+.category-badge-percent.danger {
+  background: var(--accent-red-subtle);
+  color: var(--accent-red);
+}
+
+/* Category Progress Bar */
+.category-progress-track {
+  width: 100%;
+  height: 7px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.category-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.35s cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+
+.category-progress-fill.safe {
+  background-color: var(--accent-green);
+}
+
+.category-progress-fill.warning {
+  background-color: var(--accent-orange);
+}
+
+.category-progress-fill.danger {
+  background-color: var(--accent-red);
+}
+
+.category-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.category-remaining-text {
+  font-weight: 600;
+}
+
+.category-remaining-text.safe {
+  color: var(--accent-green);
+}
+
+.category-remaining-text.warning {
+  color: var(--accent-orange);
+}
+
+.category-remaining-text.danger {
+  color: var(--accent-red);
+  font-weight: 700;
+}
+
+.category-limit-badge {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.empty-state-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.empty-state-desc {
+  font-size: 13px;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   4. Quick-Add Modal Bottom Sheet & Numpad (MoneyNote Style)
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--modal-overlay);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 100;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.modal-overlay.open {
+  display: flex;
+  opacity: 1;
+}
+
+.bottom-sheet {
+  background-color: var(--card-bg);
+  width: 100%;
+  max-width: 520px;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  padding: 16px 20px calc(var(--safe-bottom) + 16px) 20px;
+  box-shadow: var(--shadow-lg);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 94vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-overlay.open .bottom-sheet {
+  transform: translateY(0);
+}
+
+.sheet-handle-bar {
+  width: 38px;
+  height: 5px;
+  background-color: var(--separator);
+  border-radius: var(--radius-full);
+  margin: 0 auto 12px auto;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.sheet-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.sheet-close-btn {
+  background: var(--bg-primary);
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  font-size: 15px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Amount Input Screen */
+.amount-display-box {
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  text-align: right;
+  margin-bottom: 14px;
+  border: 1px solid var(--separator);
+}
+
+.amount-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.amount-number-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.currency-symbol {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.amount-value {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--text-primary);
+}
+
+/* Category Quick-Chips (Horizontal scrolling or grid) */
+.category-chips-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.category-chips-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.category-chips-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 12px 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.category-chips-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chip-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background-color: var(--bg-primary);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.chip-btn:active {
+  transform: scale(0.94);
+}
+
+.chip-btn.selected {
+  background-color: var(--accent-blue-subtle);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.chip-btn .chip-icon {
+  font-size: 15px;
+}
+
+/* Optional fields in sheet */
+.sheet-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sheet-input-field {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+}
+
+.sheet-input-field:focus {
+  border-color: var(--accent-blue);
+}
+
+/* Tactile Calculator Keypad */
+.numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.numpad-key {
+  background-color: var(--bg-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  height: 52px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.1s ease, transform 0.08s ease;
+}
+
+.numpad-key:active {
+  background-color: var(--bg-tertiary);
+  transform: scale(0.95);
+}
+
+.numpad-key.key-action {
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+.sheet-submit-btn {
+  width: 100%;
+  background-color: var(--accent-blue);
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.35);
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+
+.sheet-submit-btn:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   5. Category Manager View
+   ========================================================================== */
+.categories-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.category-manager-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--card-bg);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 0.5px solid var(--card-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.category-manager-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.category-manager-limit {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  background-color: var(--accent-blue-subtle);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  border: none;
+  transition: transform 0.1s ease;
+}
+
+.category-manager-limit:active {
+  transform: scale(0.92);
+}
+
+.category-manager-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-manager-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background-color: var(--accent-red-subtle, rgba(255, 59, 48, 0.1));
+  color: var(--accent-red, #ff3b30);
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-size: 14px;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.category-manager-delete-btn:active {
+  transform: scale(0.92);
+  background-color: rgba(255, 59, 48, 0.2);
+}
+
+.sheet-delete-btn {
+  width: 100%;
+  background-color: var(--accent-red-subtle, rgba(255, 59, 48, 0.1));
+  color: var(--accent-red, #ff3b30);
+  border: 1px solid rgba(255, 59, 48, 0.25);
+  border-radius: var(--radius-md);
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.sheet-delete-btn:active {
+  transform: scale(0.97);
+  background-color: rgba(255, 59, 48, 0.2);
+}
+
+.add-category-btn {
+  width: 100%;
+  padding: 14px;
+  background-color: var(--card-bg);
+  border: 1.5px dashed var(--accent-blue);
+  border-radius: var(--radius-md);
+  color: var(--accent-blue);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 14px;
+  transition: background-color 0.15s ease;
+}
+
+.add-category-btn:active {
+  background-color: var(--accent-blue-subtle);
+}
+
+/* ==========================================================================
+   6. History Transactions View
+   ========================================================================== */
+.history-date-group {
+  margin-bottom: 20px;
+}
+
+.history-date-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px 6px 4px;
+  border-bottom: 0.5px solid var(--separator);
+  margin-bottom: 8px;
+}
+
+.history-date-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+}
+
+.history-day-total {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.history-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transaction-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--card-bg);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 0.5px solid var(--card-border);
+}
+
+.transaction-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.transaction-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.transaction-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.transaction-cat-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.transaction-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 1px;
+}
+
+.transaction-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.transaction-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.transaction-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.transaction-delete-btn:active {
+  color: var(--accent-red);
+}
+
+/* ==========================================================================
+   7. Settings & Backup View
+   ========================================================================== */
+.settings-section-card {
+  background-color: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  border: 0.5px solid var(--card-border);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.settings-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.settings-btn:active {
+  background-color: var(--bg-tertiary);
+}
+
+.settings-btn.btn-danger {
+  color: var(--accent-red);
+  border-color: rgba(255, 59, 48, 0.2);
+}
+

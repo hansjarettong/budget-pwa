@@ -1,0 +1,313 @@
+/* ==========================================================================
+   app.css - iOS Human Interface Guidelines (HIG) Base Styles & Layout
+   ========================================================================== */
+
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  
+  /* Light Theme Palette */
+  --bg-primary: #F2F2F7;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #E5E5EA;
+  --card-bg: #FFFFFF;
+  --card-elevated: #FFFFFF;
+  --card-border: rgba(60, 60, 67, 0.08);
+  
+  --text-primary: #000000;
+  --text-secondary: #8E8E93;
+  --text-tertiary: #C7C7CC;
+  
+  --accent-blue: #007AFF;
+  --accent-blue-subtle: rgba(0, 122, 255, 0.12);
+  --accent-green: #34C759;
+  --accent-green-subtle: rgba(52, 199, 89, 0.15);
+  --accent-orange: #FF9500;
+  --accent-orange-subtle: rgba(255, 149, 0, 0.15);
+  --accent-red: #FF3B30;
+  --accent-red-subtle: rgba(255, 59, 48, 0.15);
+  
+  --separator: rgba(60, 60, 67, 0.12);
+  --nav-bg: rgba(249, 249, 249, 0.88);
+  --modal-overlay: rgba(0, 0, 0, 0.4);
+  
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.15);
+  
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tab-bar-height: 60px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #000000;
+    --bg-secondary: #1C1C1E;
+    --bg-tertiary: #2C2C2E;
+    --card-bg: #1C1C1E;
+    --card-elevated: #2C2C2E;
+    --card-border: rgba(255, 255, 255, 0.08);
+    
+    --text-primary: #FFFFFF;
+    --text-secondary: #8E8E93;
+    --text-tertiary: #48484A;
+    
+    --accent-blue: #0A84FF;
+    --accent-blue-subtle: rgba(10, 132, 255, 0.2);
+    --accent-green: #30D158;
+    --accent-green-subtle: rgba(48, 209, 88, 0.2);
+    --accent-orange: #FF9F0A;
+    --accent-orange-subtle: rgba(255, 159, 10, 0.2);
+    --accent-red: #FF453A;
+    --accent-red-subtle: rgba(255, 69, 58, 0.2);
+    
+    --separator: rgba(84, 84, 88, 0.35);
+    --nav-bg: rgba(28, 28, 30, 0.88);
+    --modal-overlay: rgba(0, 0, 0, 0.65);
+    
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* ==========================================================================
+   Reset & Base Setup
+   ========================================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  font-family: var(--font-family);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, button, select, textarea {
+  font-family: inherit;
+  color: inherit;
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+/* ==========================================================================
+   App Shell & Screen Layout
+   ========================================================================== */
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding-bottom: calc(var(--tab-bar-height) + var(--safe-bottom) + 16px);
+}
+
+/* Top App Header */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding-top: calc(var(--safe-top) + 12px);
+  padding-bottom: 12px;
+  padding-left: 20px;
+  padding-right: 20px;
+  background-color: var(--nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 0.5px solid var(--separator);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.app-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.header-action-btn {
+  background: none;
+  border: none;
+  color: var(--accent-blue);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: opacity 0.15s ease;
+}
+
+.header-action-btn:active {
+  opacity: 0.6;
+}
+
+/* Tab Views Container */
+.main-content {
+  flex: 1;
+  padding: 16px 18px 24px 18px;
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.view-section {
+  display: none;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.view-section.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Bottom Navigation Bar
+   ========================================================================== */
+.bottom-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--tab-bar-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background-color: var(--nav-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 0.5px solid var(--separator);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 60;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.tab-item:active {
+  transform: scale(0.92);
+}
+
+.tab-icon {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.tab-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+}
+
+.tab-item.active {
+  color: var(--accent-blue);
+}
+
+.tab-item.active .tab-label {
+  font-weight: 600;
+}
+
+/* Floating Action Button (Quick Add) */
+.fab-quick-add {
+  position: fixed;
+  right: 20px;
+  bottom: calc(var(--tab-bar-height) + var(--safe-bottom) + 16px);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--accent-blue), #5E5CE6);
+  color: #FFFFFF;
+  border: none;
+  box-shadow: 0 6px 18px rgba(0, 122, 255, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 300;
+  cursor: pointer;
+  z-index: 55;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fab-quick-add:active {
+  transform: scale(0.92);
+  box-shadow: 0 3px 10px rgba(0, 122, 255, 0.3);
+}
+
+/* ==========================================================================
+   Toast Notifications
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  top: calc(var(--safe-top) + 60px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 90%;
+  max-width: 380px;
+}
+
+.toast {
+  background: rgba(30, 30, 32, 0.94);
+  color: #FFFFFF;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: toastSlideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes toastSlideDown {
+  from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.toast.toast-fadeout {
+  animation: toastFadeOut 0.25s forwards;
+}
+
+@keyframes toastFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+

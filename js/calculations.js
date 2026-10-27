@@ -114,7 +114,7 @@ const SUPPORTED_CURRENCIES = {
  */
 function getCurrencyConfig(code) {
   const upper = String(code || '').toUpperCase().trim();
-  return SUPPORTED_CURRENCIES[upper] || SUPPORTED_CURRENCIES['USD'];
+  return SUPPORTED_CURRENCIES[upper] || SUPPORTED_CURRENCIES['JPY'];
 }
 
 /**

@@ -19,7 +19,7 @@
   class NumpadController {
     constructor(options = {}) {
       this.currentBuffer = '0';
-      this.maxAmount = 999999.99;
+      this.maxAmount = 99999999;
       this.onAmountChange = options.onAmountChange || function () {};
     }
 

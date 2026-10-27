@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 1. App State
   let currentMonthKey = window.BudgetCalculations.getCurrentMonthKey();
+  let pickerYear = parseInt(currentMonthKey.split('-')[0], 10);
   let activeTab = 'dashboard';
   let selectedCategoryId = null;
   let editingCategoryId = null;
@@ -41,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function initApp() {
     setupTabNavigation();
     setupMonthNavigation();
+    setupMonthPickerModal();
     setupQuickAddModal();
     setupCategoryEditModal();
     setupSettingsActions();
@@ -118,21 +120,90 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
-  // Month Navigation (< Prev, Current, Next >)
+  // Month Navigation (< Prev, Current, Next >, Jump to Month)
   // ==========================================================================
   function setupMonthNavigation() {
     document.addEventListener('click', (e) => {
-      if (e.target.closest('#btnPrevMonth')) {
+      if (e.target.closest('#btnPrevMonth') || e.target.closest('.btn-prev-month')) {
         currentMonthKey = window.BudgetCalculations.getPreviousMonthKey(currentMonthKey);
         renderCurrentView();
-      } else if (e.target.closest('#btnNextMonth')) {
+      } else if (e.target.closest('#btnNextMonth') || e.target.closest('.btn-next-month')) {
         currentMonthKey = window.BudgetCalculations.getNextMonthKey(currentMonthKey);
         renderCurrentView();
-      } else if (e.target.closest('#btnResetToCurrentMonth')) {
+      } else if (e.target.closest('#btnResetToCurrentMonth') || e.target.closest('.btn-reset-current-month')) {
         currentMonthKey = window.BudgetCalculations.getCurrentMonthKey();
         renderCurrentView();
+      } else if (e.target.closest('#btnOpenMonthPicker') || e.target.closest('.btn-open-month-picker')) {
+        openMonthPickerModal();
       }
     });
+  }
+
+  function setupMonthPickerModal() {
+    const overlay = document.getElementById('monthPickerModal');
+    const closeBtn = document.getElementById('btnMonthPickerClose');
+    const prevYearBtn = document.getElementById('btnPickerPrevYear');
+    const nextYearBtn = document.getElementById('btnPickerNextYear');
+    const grid = document.getElementById('monthPickerGrid');
+    const jumpCurrentBtn = document.getElementById('btnPickerJumpToCurrent');
+
+    if (closeBtn) closeBtn.addEventListener('click', closeMonthPickerModal);
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeMonthPickerModal();
+      });
+    }
+
+    if (prevYearBtn) {
+      prevYearBtn.addEventListener('click', () => {
+        pickerYear -= 1;
+        window.BudgetUI.renderMonthPicker(pickerYear, currentMonthKey);
+      });
+    }
+
+    if (nextYearBtn) {
+      nextYearBtn.addEventListener('click', () => {
+        pickerYear += 1;
+        window.BudgetUI.renderMonthPicker(pickerYear, currentMonthKey);
+      });
+    }
+
+    if (grid) {
+      grid.addEventListener('click', (e) => {
+        const tile = e.target.closest('.month-picker-tile');
+        if (tile) {
+          const selectedMonth = tile.getAttribute('data-month');
+          if (selectedMonth) {
+            currentMonthKey = selectedMonth;
+            closeMonthPickerModal();
+            renderCurrentView();
+          }
+        }
+      });
+    }
+
+    if (jumpCurrentBtn) {
+      jumpCurrentBtn.addEventListener('click', () => {
+        currentMonthKey = window.BudgetCalculations.getCurrentMonthKey();
+        closeMonthPickerModal();
+        renderCurrentView();
+      });
+    }
+  }
+
+  function openMonthPickerModal() {
+    pickerYear = parseInt(currentMonthKey.split('-')[0], 10);
+    if (isNaN(pickerYear)) {
+      pickerYear = new Date().getFullYear();
+    }
+    window.BudgetUI.renderMonthPicker(pickerYear, currentMonthKey);
+    const overlay = document.getElementById('monthPickerModal');
+    if (overlay) overlay.classList.add('open');
+  }
+
+  function closeMonthPickerModal() {
+    const overlay = document.getElementById('monthPickerModal');
+    if (overlay) overlay.classList.remove('open');
   }
 
   // ==========================================================================

@@ -168,7 +168,7 @@
         <div class="amount-display-box">
           <div class="amount-label">Amount Spent</div>
           <div class="amount-number-row">
-            <span class="currency-symbol" id="quickAddCurrencySymbol">$</span>
+            <span class="currency-symbol" id="quickAddCurrencySymbol">¥</span>
             <span class="amount-value" id="numpadAmountDisplay">0</span>
           </div>
         </div>
@@ -225,8 +225,8 @@
               <input type="text" class="sheet-input-field" id="editCategoryIcon" placeholder="🍔" maxlength="2" style="text-align: center; font-size: 20px;">
             </div>
             <div>
-              <label id="editCategoryLimitLabel" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Monthly Limit ($)</label>
-              <input type="number" class="sheet-input-field" id="editCategoryLimit" placeholder="400" min="0" step="10">
+              <label id="editCategoryLimitLabel" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Monthly Limit (¥)</label>
+              <input type="number" class="sheet-input-field" id="editCategoryLimit" placeholder="50000" min="0" step="1000">
             </div>
           </div>
           <div>
@@ -237,6 +237,30 @@
 
         <button class="sheet-submit-btn" id="btnSaveCategory">Save Budget Limit</button>
         <button type="button" class="sheet-delete-btn" id="btnDeleteCategory" style="display: none;">Delete Category</button>
+      </div>
+    </div>
+
+    <!-- Month Picker Modal (Jump to Month) -->
+    <div class="modal-overlay" id="monthPickerModal">
+      <div class="bottom-sheet">
+        <div class="sheet-handle-bar"></div>
+        <div class="sheet-header">
+          <h3 class="sheet-title">Jump to Month</h3>
+          <button class="sheet-close-btn" id="btnMonthPickerClose" aria-label="Close">✕</button>
+        </div>
+
+        <!-- Year Navigation Selector -->
+        <div class="month-picker-year-bar">
+          <button class="month-picker-year-btn" id="btnPickerPrevYear" aria-label="Previous Year">‹</button>
+          <span class="month-picker-year-display" id="pickerYearDisplay">2026</span>
+          <button class="month-picker-year-btn" id="btnPickerNextYear" aria-label="Next Year">›</button>
+        </div>
+
+        <!-- 12-Month Grid -->
+        <div class="month-picker-grid" id="monthPickerGrid"></div>
+
+        <!-- Jump to Current Month Button -->
+        <button class="month-picker-today-btn" id="btnPickerJumpToCurrent">Jump to Current Month</button>
       </div>
     </div>
 

@@ -4,7 +4,7 @@
  * Includes sanitization for Safari/WebKit redirected navigation responses.
  */
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `budget-tracker-${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [

@@ -10,8 +10,8 @@ A fast, lightweight, and offline-first personal budget tracker designed with a c
 - **⚡ Offline-First PWA:** Full service worker caching (`sw.js`). Works seamlessly without internet or in airplane mode.
 - **📊 Visual Spending Limits:** Real-time color-coded progress bars for each category showing budget consumption and remaining allowance.
 - **⌨️ MoneyNote-Style Numpad:** Custom quick-add sheet with an integrated numpad for rapid, frictionless expense logging.
-- **📅 Month-by-Month History:** Easily navigate past and upcoming months with aggregated category spending summaries.
-- **🌍 Multi-Currency Support:** Switch between USD ($), EUR (€), GBP (£), JPY (¥), PHP (₱), and other international currencies.
+- **📅 Month-by-Month History & Quick Jump:** Easily navigate past and upcoming months with 1-tap `‹` and `›` buttons or tap the month title to open the 12-month calendar picker with year navigation and transaction indicator dots.
+- **🌍 Multi-Currency Support (Default: JPY ¥):** Pre-configured with Japanese Yen (¥) and zero-decimal formatting, with support for USD ($), EUR (€), GBP (£), PHP (₱), and other international currencies.
 - **💾 Backup & Portability:**
   - **JSON Backup & Restore:** Export your full data file to back up or transfer between phones.
   - **CSV Export:** Download a spreadsheet of your expenses for Excel, Google Sheets, or tax tracking.

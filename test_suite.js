@@ -66,8 +66,14 @@ test('Month human display formatting', () => {
 });
 
 test('Currency formatting', () => {
-  const formatted = formatCurrency(4250.75);
-  assert(formatted.includes('4,250.75') || formatted.includes('4250.75'), 'Formatted currency: ' + formatted);
+  // Default currency is JPY (0 fraction digits)
+  const defaultJpy = formatCurrency(4250);
+  assert(defaultJpy.includes('¥') || defaultJpy.includes('JPY'), 'Default currency should format with ¥: ' + defaultJpy);
+  assert(defaultJpy.includes('4,250') || defaultJpy.includes('4250'), 'Default JPY should format 4,250: ' + defaultJpy);
+
+  // Explicit USD (2 fraction digits)
+  const usdFormatted = formatCurrency(4250.75, 'USD');
+  assert(usdFormatted.includes('4,250.75') || usdFormatted.includes('4250.75'), 'Formatted USD currency: ' + usdFormatted);
 });
 
 test('Category spending aggregation', () => {
@@ -144,13 +150,17 @@ test('Transaction grouping by date descending', () => {
 });
 
 // 2. Data Store Tests
-test('Default 10 categories initialization', () => {
+test('Default 10 categories initialization with JPY limits', () => {
   BudgetStore.resetToDefaultData();
   const cats = BudgetStore.getCategories();
   assertEquals(cats.length, 10, 'Should load 10 pre-configured default categories');
   assert(cats.some(c => c.name === 'Dining'), 'Should contain Dining');
   assert(cats.some(c => c.name === 'Groceries'), 'Should contain Groceries');
   assert(cats.some(c => c.name === 'Transport'), 'Should contain Transport');
+  const dining = cats.find(c => c.id === 'cat_dining');
+  assertEquals(dining.limit, 40000, 'Dining limit should default to 40,000 JPY');
+  const groceries = cats.find(c => c.id === 'cat_groceries');
+  assertEquals(groceries.limit, 50000, 'Groceries limit should default to 50,000 JPY');
 });
 
 test('Category updating and saving', () => {
@@ -237,10 +247,15 @@ test('Multi-currency configuration and formatting (JPY, PHP, EUR, GBP, USD)', ()
   const gbpFormatted = BudgetCalculations.formatCurrency(100);
   assert(gbpFormatted.includes('£'), 'GBP format should include £');
 
-  // Reset currency back to USD
+  // Test USD
   BudgetStore.setCurrency('USD');
   assertEquals(BudgetStore.getCurrency(), 'USD', 'Active currency should be USD');
   assertEquals(BudgetCalculations.getCurrencySymbol(), '$', 'USD symbol should be $');
+
+  // Reset currency back to default JPY
+  BudgetStore.setCurrency('JPY');
+  assertEquals(BudgetStore.getCurrency(), 'JPY', 'Default active currency should be JPY');
+  assertEquals(BudgetCalculations.getCurrencySymbol(), '¥', 'Default symbol should be ¥');
 });
 
 test('Transaction lifecycle: Add, retrieve, filter, delete', () => {
@@ -340,6 +355,32 @@ test('Numpad keypad typing, decimal precision, backspace, max limit', () => {
   // Test setting amount programmatically
   numpad.setAmount(120.5);
   assertEquals(numpad.getNumericValue(), 120.5, 'Programmatic amount should be 120.5');
+});
+
+test('Numpad accepts large amounts for JPY (up to 99,999,999)', () => {
+  const numpad = new BudgetNumpad.NumpadController();
+  // Enter 1,500,000 (1.5 million yen)
+  '1500000'.split('').forEach(d => numpad.pressDigit(d));
+  assertEquals(numpad.getNumericValue(), 1500000, 'Should allow 1,500,000 yen');
+});
+
+test('getMonthsWithTransactions returns sorted list of months with activity', () => {
+  BudgetStore.addTransaction({
+    categoryId: 'cat_dining',
+    amount: 1500,
+    date: '2025-11-20',
+    note: 'Dinner'
+  });
+  BudgetStore.addTransaction({
+    categoryId: 'cat_groceries',
+    amount: 3200,
+    date: '2026-02-15',
+    note: 'Market'
+  });
+
+  const months = BudgetStore.getMonthsWithTransactions();
+  assert(months.includes('2025-11'), 'Should include 2025-11');
+  assert(months.includes('2026-02'), 'Should include 2026-02');
 });
 
 log('\n-----------------------------------------');

@@ -42,19 +42,19 @@ const STORAGE_KEYS = {
 };
 
 /**
- * 10 Pre-configured default budget categories with icons, colors, and initial monthly limits.
+ * 10 Pre-configured default budget categories with icons, colors, and initial monthly limits (in JPY).
  */
 const DEFAULT_CATEGORIES = [
-  { id: 'cat_dining', name: 'Dining', icon: '🍔', limit: 400, color: '#f97316' },
-  { id: 'cat_groceries', name: 'Groceries', icon: '🛒', limit: 500, color: '#10b981' },
-  { id: 'cat_transport', name: 'Transport', icon: '🚇', limit: 150, color: '#06b6d4' },
-  { id: 'cat_bills', name: 'Bills & Utilities', icon: '⚡', limit: 300, color: '#eab308' },
-  { id: 'cat_shopping', name: 'Shopping', icon: '🛍️', limit: 200, color: '#ec4899' },
-  { id: 'cat_entertainment', name: 'Entertainment', icon: '🎬', limit: 150, color: '#8b5cf6' },
-  { id: 'cat_health', name: 'Health & Wellness', icon: '💊', limit: 100, color: '#ef4444' },
-  { id: 'cat_personal', name: 'Personal Care', icon: '💈', limit: 80, color: '#3b82f6' },
-  { id: 'cat_education', name: 'Education', icon: '📚', limit: 60, color: '#14b8a6' },
-  { id: 'cat_misc', name: 'Miscellaneous', icon: '📦', limit: 100, color: '#64748b' }
+  { id: 'cat_dining', name: 'Dining', icon: '🍔', limit: 40000, color: '#f97316' },
+  { id: 'cat_groceries', name: 'Groceries', icon: '🛒', limit: 50000, color: '#10b981' },
+  { id: 'cat_transport', name: 'Transport', icon: '🚇', limit: 15000, color: '#06b6d4' },
+  { id: 'cat_bills', name: 'Bills & Utilities', icon: '⚡', limit: 30000, color: '#eab308' },
+  { id: 'cat_shopping', name: 'Shopping', icon: '🛍️', limit: 20000, color: '#ec4899' },
+  { id: 'cat_entertainment', name: 'Entertainment', icon: '🎬', limit: 15000, color: '#8b5cf6' },
+  { id: 'cat_health', name: 'Health & Wellness', icon: '💊', limit: 10000, color: '#ef4444' },
+  { id: 'cat_personal', name: 'Personal Care', icon: '💈', limit: 10000, color: '#3b82f6' },
+  { id: 'cat_education', name: 'Education', icon: '📚', limit: 10000, color: '#14b8a6' },
+  { id: 'cat_misc', name: 'Miscellaneous', icon: '📦', limit: 10000, color: '#64748b' }
 ];
 
 /**
@@ -79,12 +79,12 @@ function generateId(prefix = 'id') {
 }
 
 /**
- * Retrieves the currently active currency code (defaults to 'USD').
- * @returns {string} e.g. 'USD', 'JPY', 'PHP'
+ * Retrieves the currently active currency code (defaults to 'JPY').
+ * @returns {string} e.g. 'JPY', 'USD', 'PHP'
  */
 function getCurrency() {
   const storage = getStorage();
-  return storage.getItem(STORAGE_KEYS.CURRENCY) || 'USD';
+  return storage.getItem(STORAGE_KEYS.CURRENCY) || 'JPY';
 }
 
 /**
@@ -94,7 +94,7 @@ function getCurrency() {
  */
 function setCurrency(currencyCode) {
   const storage = getStorage();
-  const code = String(currencyCode || 'USD').toUpperCase().trim();
+  const code = String(currencyCode || 'JPY').toUpperCase().trim();
   storage.setItem(STORAGE_KEYS.CURRENCY, code);
   return code;
 }
@@ -293,6 +293,24 @@ function deleteTransaction(transactionId) {
 }
 
 /**
+ * Returns an array of distinct 'YYYY-MM' month strings that contain at least one transaction.
+ * @returns {Array<string>} e.g. ['2026-01', '2026-10']
+ */
+function getMonthsWithTransactions() {
+  const transactions = getTransactions();
+  const monthsSet = new Set();
+  for (const tx of transactions) {
+    if (tx && tx.date) {
+      const monthPart = String(tx.date).slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(monthPart)) {
+        monthsSet.add(monthPart);
+      }
+    }
+  }
+  return Array.from(monthsSet).sort();
+}
+
+/**
  * Exports all data (categories + transactions) as JSON string.
  * @returns {string}
  */
@@ -440,6 +458,7 @@ const BudgetStore = {
   addTransaction,
   updateTransaction,
   deleteTransaction,
+  getMonthsWithTransactions,
   exportDataJSON,
   importDataJSON,
   exportTransactionsCSV,

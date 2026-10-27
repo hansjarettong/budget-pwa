@@ -52,14 +52,53 @@
 
     container.innerHTML = `
       <div class="month-selector-bar">
-        <button class="month-nav-btn" id="btnPrevMonth" aria-label="Previous Month">‹</button>
+        <button class="month-nav-btn btn-prev-month" id="btnPrevMonth" aria-label="Previous Month">‹</button>
         <div class="month-title-wrap">
-          <div class="month-title">${title}</div>
-          ${!isCurrent ? `<span class="month-today-badge" id="btnResetToCurrentMonth">Back to Current Month</span>` : ''}
+          <button class="month-title-btn btn-open-month-picker" id="btnOpenMonthPicker" aria-label="Jump to Month">
+            <span class="month-calendar-icon">📅</span>
+            <span class="month-title-text">${title}</span>
+            <span class="month-dropdown-caret">▾</span>
+          </button>
+          ${!isCurrent ? `<button class="month-today-badge btn-reset-current-month" id="btnResetToCurrentMonth">Back to Current Month</button>` : ''}
         </div>
-        <button class="month-nav-btn" id="btnNextMonth" aria-label="Next Month">›</button>
+        <button class="month-nav-btn btn-next-month" id="btnNextMonth" aria-label="Next Month">›</button>
       </div>
     `;
+  }
+
+  /**
+   * Renders the 12-Month Grid and Year display inside the Month Picker Modal
+   */
+  function renderMonthPicker(pickerYear, currentActiveMonthKey) {
+    const yearDisplay = document.getElementById('pickerYearDisplay');
+    const gridContainer = document.getElementById('monthPickerGrid');
+    if (yearDisplay) {
+      yearDisplay.textContent = pickerYear;
+    }
+    if (!gridContainer) return;
+
+    const actualCurrentMonthKey = Calc().getCurrentMonthKey();
+    const recordedMonths = Store().getMonthsWithTransactions ? Store().getMonthsWithTransactions() : [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    let html = '';
+    for (let m = 1; m <= 12; m++) {
+      const monthStr = String(m).padStart(2, '0');
+      const monthKey = `${pickerYear}-${monthStr}`;
+      const isActive = monthKey === currentActiveMonthKey;
+      const isCurrent = monthKey === actualCurrentMonthKey;
+      const hasData = recordedMonths.includes(monthKey);
+      const name = monthNames[m - 1];
+
+      html += `
+        <button class="month-picker-tile ${isActive ? 'is-active' : ''} ${isCurrent ? 'is-current' : ''}" data-month="${monthKey}">
+          <span>${name}</span>
+          ${hasData ? '<span class="tile-dot" title="Has expenses"></span>' : ''}
+        </button>
+      `;
+    }
+
+    gridContainer.innerHTML = html;
   }
 
   /**
@@ -390,6 +429,7 @@
   return {
     showToast,
     renderMonthSelector,
+    renderMonthPicker,
     renderSummaryCard,
     renderCategoryCards,
     renderQuickAddChips,

@@ -7,14 +7,17 @@ A fast, lightweight, and offline-first personal budget tracker designed with a c
 ## ✨ Features
 
 - **🔒 100% Local & Private:** All transactions, categories, and custom limits stay on your device via browser `localStorage`. No accounts, no database, no servers, and zero tracking.
+- **🛡️ Storage Durability (Automatic):** Leverages `navigator.storage.persist()` on launch to exempt budget data from automatic eviction during low disk space cleanups.
 - **⚡ Offline-First PWA:** Full service worker caching (`sw.js`). Works seamlessly without internet or in airplane mode.
 - **📊 Visual Spending Limits:** Real-time color-coded progress bars for each category showing budget consumption and remaining allowance.
 - **⌨️ MoneyNote-Style Numpad:** Custom quick-add sheet with an integrated numpad for rapid, frictionless expense logging.
 - **📅 Month-by-Month History & Quick Jump:** Easily navigate past and upcoming months with 1-tap `‹` and `›` buttons or tap the month title to open the 12-month calendar picker with year navigation and transaction indicator dots.
 - **🌍 Multi-Currency Support (Default: JPY ¥):** Pre-configured with Japanese Yen (¥) and zero-decimal formatting, with support for USD ($), EUR (€), GBP (£), PHP (₱), and other international currencies.
-- **💾 Backup & Portability:**
-  - **JSON Backup & Restore:** Export your full data file to back up or transfer between phones.
-  - **CSV Export:** Download a spreadsheet of your expenses for Excel, Google Sheets, or tax tracking.
+- **☁️ Bring Your Own Cloud & Encryption:**
+  - **Google Drive Sync (Serverless):** Connect your Google Drive to back up and restore across devices with zero backend servers.
+  - **Military-Grade AES-GCM 256-bit Encryption:** End-to-end zero-knowledge encryption via Web Cryptography API (`crypto.subtle`) protects your backups with a personal passphrase before they ever leave your device.
+  - **iCloud Drive / Dropbox Synced Folder:** 1-tap save directly into your desktop or mobile cloud synced folder.
+  - **JSON & CSV Portability:** Plain and encrypted `.json` / `.enc` backups, plus CSV spreadsheet exports for Excel or Google Sheets.
 
 ---
 
@@ -24,15 +27,17 @@ A fast, lightweight, and offline-first personal budget tracker designed with a c
 budget-pwa/
 ├── index.html          # Semantic application shell and views (Dashboard, History, Limits, Settings)
 ├── manifest.json       # PWA manifest (app name, colors, icons, display: standalone)
-├── sw.js               # Service Worker caching assets for offline capability
+├── sw.js               # Service Worker caching assets for offline capability (v5)
 ├── css/
 │   ├── app.css         # Theme tokens, iOS layout, typography, navigation bars
-│   └── components.css  # Budget bars, MoneyNote numpad sheet, transaction lists, modals
+│   └── components.css  # Budget bars, MoneyNote numpad sheet, transaction lists, modals, storage cards
 ├── js/
 │   ├── app.js          # App initialization, tab router, modal bindings, event listeners
 │   ├── calculations.js # Monthly aggregates, spending percentages, currency formatters
+│   ├── cloud.js        # Serverless Google Drive & Synced Cloud Folder sync engine
+│   ├── crypto.js       # Client-side Web Cryptography (AES-GCM 256 + PBKDF2) encryption
 │   ├── numpad.js       # Custom keypad input handler with decimal precision
-│   ├── store.js        # Data persistence layer (localStorage, JSON/CSV export/import)
+│   ├── store.js        # Data persistence layer (localStorage, storage persistence, export/import)
 │   └── ui.js           # DOM rendering (dashboard cards, progress bars, history feed)
 ├── icons/              # App icons (192x192, 512x512, Apple touch icons, favicons)
 ├── test_suite.js       # Automated logic & unit tests (runs in Node or macOS JSC)

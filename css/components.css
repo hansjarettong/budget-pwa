@@ -940,6 +940,124 @@
   border-color: rgba(255, 59, 48, 0.2);
 }
 
+.settings-header-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.status-pill.success {
+  background-color: var(--accent-green-subtle);
+  color: var(--accent-green);
+  border: 1px solid rgba(52, 199, 89, 0.3);
+}
+
+.status-pill.warning {
+  background-color: var(--accent-orange-subtle);
+  color: var(--accent-orange);
+  border: 1px solid rgba(255, 149, 0, 0.3);
+}
+
+.status-pill.neutral {
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--separator);
+}
+
+.storage-meter-wrap {
+  margin: 12px 0 14px 0;
+}
+
+.storage-meter-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.storage-progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.storage-progress-fill {
+  height: 100%;
+  background-color: var(--accent-blue);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.passphrase-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.passphrase-input-container input {
+  padding-right: 44px;
+}
+
+.btn-eye-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 6px 8px;
+}
+
+.settings-accordion {
+  border-top: 1px solid var(--separator);
+  margin-top: 14px;
+  padding-top: 10px;
+}
+
+.settings-accordion-summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.settings-accordion-content {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.settings-sync-timestamp {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ==========================================================================
    8. Month Picker Bottom Sheet ("Jump to Month")
    ========================================================================== */

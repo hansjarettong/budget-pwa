@@ -45,7 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupMonthPickerModal();
     setupQuickAddModal();
     setupCategoryEditModal();
+    setupPassphraseModal();
     setupSettingsActions();
+    initStoragePersistence();
     updateCurrencyDisplay();
     renderCurrentView();
   }
@@ -439,15 +441,219 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
+  // Storage Durability & Cloud Backup Controllers
+  // ==========================================================================
+  let pendingPassphraseAction = null; // { type: 'file' | 'cloud', content?: string }
+
+  function setupPassphraseModal() {
+    const overlay = document.getElementById('passphraseModal');
+    const closeBtn = document.getElementById('btnPassphraseModalClose');
+    const submitBtn = document.getElementById('btnModalPassphraseSubmit');
+    const input = document.getElementById('modalPassphraseInput');
+    const toggleBtn = document.getElementById('btnModalPassphraseToggle');
+
+    if (closeBtn) closeBtn.addEventListener('click', closePassphraseModal);
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closePassphraseModal();
+      });
+    }
+
+    if (toggleBtn && input) {
+      toggleBtn.addEventListener('click', () => {
+        const isPassword = input.getAttribute('type') === 'password';
+        input.setAttribute('type', isPassword ? 'text' : 'password');
+        toggleBtn.textContent = isPassword ? '🙈' : '👁️';
+      });
+    }
+
+    if (submitBtn) {
+      submitBtn.addEventListener('click', handlePassphraseSubmit);
+    }
+  }
+
+  function openPassphraseModal(action) {
+    pendingPassphraseAction = action;
+    const overlay = document.getElementById('passphraseModal');
+    const input = document.getElementById('modalPassphraseInput');
+    if (input) {
+      input.value = window.BudgetCloud ? window.BudgetCloud.getSessionPassphrase() : '';
+      setTimeout(() => input.focus(), 100);
+    }
+    if (overlay) overlay.classList.add('open');
+  }
+
+  function closePassphraseModal() {
+    const overlay = document.getElementById('passphraseModal');
+    if (overlay) overlay.classList.remove('open');
+    pendingPassphraseAction = null;
+  }
+
+  async function handlePassphraseSubmit() {
+    const input = document.getElementById('modalPassphraseInput');
+    const passphrase = (input ? input.value : '').trim();
+
+    if (!passphrase) {
+      window.BudgetUI.showToast('Please enter a passphrase');
+      return;
+    }
+
+    if (window.BudgetCloud) {
+      window.BudgetCloud.setSessionPassphrase(passphrase);
+      const cloudInput = document.getElementById('inputCloudPassphrase');
+      if (cloudInput) cloudInput.value = passphrase;
+    }
+
+    if (pendingPassphraseAction && pendingPassphraseAction.type === 'file') {
+      const content = pendingPassphraseAction.content;
+      try {
+        const result = await window.BudgetStore.importDataJSONAsync(content, passphrase);
+        if (result.success) {
+          closePassphraseModal();
+          updateCurrencyDisplay();
+          window.BudgetUI.showToast(`Imported ${result.categoriesCount} categories and ${result.transactionsCount} transactions!`);
+          renderCurrentView();
+        } else {
+          alert('Decryption failed: ' + (result.error || 'Incorrect passphrase'));
+        }
+      } catch (err) {
+        alert('Decryption error: ' + err.message);
+      }
+    } else if (pendingPassphraseAction && pendingPassphraseAction.type === 'cloud') {
+      try {
+        const result = await window.BudgetCloud.restoreFromGoogleDrive({ passphrase });
+        if (result.success) {
+          closePassphraseModal();
+          updateCurrencyDisplay();
+          updateCloudSyncUI();
+          window.BudgetUI.showToast(`Restored ${result.categoriesCount} categories and ${result.transactionsCount} transactions from Google Drive!`);
+          renderCurrentView();
+        } else {
+          alert('Cloud restore failed: ' + (result.error || 'Incorrect passphrase'));
+        }
+      } catch (err) {
+        alert('Cloud restore failed: ' + err.message);
+      }
+    }
+  }
+
+  function updateStorageDurabilityUI(isPersisted) {
+    const badge = document.getElementById('storageStatusBadge');
+    const badgeText = document.getElementById('storageStatusText');
+    const desc = document.getElementById('storageStatusDesc');
+    const btnRequest = document.getElementById('btnRequestPersistence');
+    const meterWrap = document.getElementById('storageMeterWrap');
+    const ratioEl = document.getElementById('storageUsageRatio');
+    const progressFill = document.getElementById('storageProgressFill');
+
+    if (badge && badgeText) {
+      badge.className = 'status-pill ' + (isPersisted ? 'success' : 'warning');
+      badgeText.textContent = isPersisted ? 'Protected (Persistent)' : 'Standard (Best-effort)';
+    }
+
+    if (desc) {
+      desc.textContent = isPersisted
+        ? 'Persistent storage active. Your budget data is registered as persistent app data and will never be automatically deleted by your browser during low disk space cleanups.'
+        : 'Storage is currently best-effort. Tap "Enable Storage Protection" or add this PWA to your Home Screen to prevent automatic browser eviction.';
+    }
+
+    if (btnRequest) {
+      btnRequest.style.display = isPersisted ? 'none' : 'flex';
+    }
+
+    if (window.BudgetStore && window.BudgetStore.getStorageEstimate) {
+      window.BudgetStore.getStorageEstimate().then(est => {
+        if (est && meterWrap && ratioEl && progressFill) {
+          meterWrap.style.display = 'block';
+          ratioEl.textContent = `${est.usageFormatted} / ${est.quotaFormatted}`;
+          progressFill.style.width = `${Math.max(1, Math.min(100, est.percent))}%`;
+        }
+      });
+    }
+  }
+
+  function initStoragePersistence() {
+    if (window.BudgetStore && window.BudgetStore.requestStoragePersistence) {
+      window.BudgetStore.requestStoragePersistence()
+        .then(isPersisted => {
+          updateStorageDurabilityUI(isPersisted);
+        })
+        .catch(() => updateStorageDurabilityUI(false));
+    }
+  }
+
+  function updateCloudSyncUI() {
+    const cloud = window.BudgetCloud;
+    if (!cloud) return;
+
+    const isConnected = cloud.isConnected();
+    const badge = document.getElementById('cloudStatusBadge');
+    const badgeText = document.getElementById('cloudStatusText');
+    const btnConnectText = document.getElementById('btnConnectGDriveText');
+    const btnBackup = document.getElementById('btnBackupGDrive');
+    const btnRestore = document.getElementById('btnRestoreGDrive');
+    const lastSyncRow = document.getElementById('cloudLastSyncRow');
+    const lastSyncTime = document.getElementById('cloudLastSyncTime');
+
+    if (badge && badgeText) {
+      badge.className = 'status-pill ' + (isConnected ? 'success' : 'neutral');
+      badgeText.textContent = isConnected ? 'Connected' : 'Disconnected';
+    }
+
+    if (btnConnectText) {
+      const email = cloud.getUserEmail();
+      btnConnectText.textContent = isConnected
+        ? `Disconnect (${email || 'Google Drive'})`
+        : 'Connect Google Drive';
+    }
+
+    if (btnBackup) btnBackup.style.display = isConnected ? 'flex' : 'none';
+    if (btnRestore) btnRestore.style.display = isConnected ? 'flex' : 'none';
+
+    const syncInfo = cloud.getLastSyncInfo();
+    if (syncInfo && lastSyncRow && lastSyncTime) {
+      lastSyncRow.style.display = 'flex';
+      const date = new Date(syncInfo.timestamp);
+      const encBadge = syncInfo.isEncrypted ? ' 🔒' : '';
+      lastSyncTime.textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + encBadge;
+    } else if (lastSyncRow) {
+      lastSyncRow.style.display = 'none';
+    }
+
+    const inputClientId = document.getElementById('inputGDriveClientId');
+    if (inputClientId && !inputClientId.value) {
+      inputClientId.value = cloud.getClientId();
+    }
+
+    const currentOriginCode = document.getElementById('currentOriginCode');
+    if (currentOriginCode) {
+      currentOriginCode.textContent = window.location.origin;
+    }
+  }
+
+  // ==========================================================================
   // Settings & Data Export / Import
   // ==========================================================================
   function setupSettingsActions() {
     const selectCurrency = document.getElementById('selectCurrency');
     const btnExportJSON = document.getElementById('btnExportJSON');
+    const btnExportEncryptedJSON = document.getElementById('btnExportEncryptedJSON');
     const btnExportCSV = document.getElementById('btnExportCSV');
     const btnImportJSON = document.getElementById('btnImportJSON');
     const fileImportInput = document.getElementById('fileImportInput');
     const btnResetData = document.getElementById('btnResetData');
+    const btnRequestPersistence = document.getElementById('btnRequestPersistence');
+
+    // Cloud Backup Elements
+    const btnConnectGDrive = document.getElementById('btnConnectGDrive');
+    const btnBackupGDrive = document.getElementById('btnBackupGDrive');
+    const btnRestoreGDrive = document.getElementById('btnRestoreGDrive');
+    const btnSaveCloudFolder = document.getElementById('btnSaveCloudFolder');
+    const btnSaveGDriveClientId = document.getElementById('btnSaveGDriveClientId');
+    const inputGDriveClientId = document.getElementById('inputGDriveClientId');
+    const chkCloudEncryption = document.getElementById('chkCloudEncryption');
+    const inputCloudPassphrase = document.getElementById('inputCloudPassphrase');
+    const btnTogglePassphraseVisibility = document.getElementById('btnTogglePassphraseVisibility');
 
     if (selectCurrency) {
       const currencies = window.BudgetCalculations.SUPPORTED_CURRENCIES || {};
@@ -466,6 +672,145 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // Storage Persistence Request
+    if (btnRequestPersistence) {
+      btnRequestPersistence.addEventListener('click', async () => {
+        if (window.BudgetStore && window.BudgetStore.requestStoragePersistence) {
+          const granted = await window.BudgetStore.requestStoragePersistence();
+          updateStorageDurabilityUI(granted);
+          if (granted) {
+            window.BudgetUI.showToast('Storage durability protection enabled!');
+          } else {
+            alert('Storage persistence could not be granted automatically. Installing the PWA to your Home Screen provides permanent persistence.');
+          }
+        }
+      });
+    }
+
+    // Encryption Settings Listeners
+    if (chkCloudEncryption && window.BudgetCloud) {
+      chkCloudEncryption.checked = window.BudgetCloud.isEncryptionEnabled();
+      chkCloudEncryption.addEventListener('change', (e) => {
+        window.BudgetCloud.setEncryptionEnabled(e.target.checked);
+        const group = document.getElementById('cloudPassphraseGroup');
+        if (group) group.style.display = e.target.checked ? 'flex' : 'none';
+      });
+    }
+
+    if (inputCloudPassphrase && window.BudgetCloud) {
+      inputCloudPassphrase.value = window.BudgetCloud.getSessionPassphrase();
+      inputCloudPassphrase.addEventListener('input', (e) => {
+        window.BudgetCloud.setSessionPassphrase(e.target.value);
+      });
+    }
+
+    if (btnTogglePassphraseVisibility && inputCloudPassphrase) {
+      btnTogglePassphraseVisibility.addEventListener('click', () => {
+        const isPassword = inputCloudPassphrase.getAttribute('type') === 'password';
+        inputCloudPassphrase.setAttribute('type', isPassword ? 'text' : 'password');
+        btnTogglePassphraseVisibility.textContent = isPassword ? '🙈' : '👁️';
+      });
+    }
+
+    // Google Client ID Save
+    if (btnSaveGDriveClientId && inputGDriveClientId && window.BudgetCloud) {
+      btnSaveGDriveClientId.addEventListener('click', () => {
+        const id = inputGDriveClientId.value.trim();
+        window.BudgetCloud.setClientId(id);
+        window.BudgetUI.showToast(id ? 'Google Client ID saved' : 'Google Client ID cleared');
+      });
+    }
+
+    // Google Drive Connect / Disconnect
+    if (btnConnectGDrive && window.BudgetCloud) {
+      btnConnectGDrive.addEventListener('click', async () => {
+        if (window.BudgetCloud.isConnected()) {
+          window.BudgetCloud.disconnectGoogleDrive();
+          updateCloudSyncUI();
+          window.BudgetUI.showToast('Disconnected Google Drive');
+        } else {
+          try {
+            await window.BudgetCloud.connectGoogleDrive();
+            updateCloudSyncUI();
+            const email = window.BudgetCloud.getUserEmail();
+            window.BudgetUI.showToast(`Connected to Google Drive${email ? ' (' + email + ')' : ''}!`);
+          } catch (err) {
+            alert('Google Drive connection failed: ' + err.message);
+          }
+        }
+      });
+    }
+
+    // Google Drive Backup
+    if (btnBackupGDrive && window.BudgetCloud) {
+      btnBackupGDrive.addEventListener('click', async () => {
+        try {
+          if (window.BudgetCloud.isEncryptionEnabled() && !window.BudgetCloud.getSessionPassphrase()) {
+            const pw = prompt('Please enter an encryption passphrase for this cloud backup:');
+            if (!pw) return;
+            window.BudgetCloud.setSessionPassphrase(pw);
+            if (inputCloudPassphrase) inputCloudPassphrase.value = pw;
+          }
+
+          window.BudgetUI.showToast('Uploading backup to Google Drive...');
+          const result = await window.BudgetCloud.backupToGoogleDrive();
+          updateCloudSyncUI();
+          window.BudgetUI.showToast(`Backup saved to Google Drive (${result.fileName})!`);
+        } catch (err) {
+          alert('Google Drive backup failed: ' + err.message);
+        }
+      });
+    }
+
+    // Google Drive Restore
+    if (btnRestoreGDrive && window.BudgetCloud) {
+      btnRestoreGDrive.addEventListener('click', async () => {
+        if (!confirm('Restore your data from Google Drive? This will update your local categories and transactions.')) {
+          return;
+        }
+
+        try {
+          window.BudgetUI.showToast('Fetching backup from Google Drive...');
+          const result = await window.BudgetCloud.restoreFromGoogleDrive();
+          if (result.needsPassphrase) {
+            openPassphraseModal({ type: 'cloud' });
+          } else if (result.success) {
+            updateCurrencyDisplay();
+            updateCloudSyncUI();
+            window.BudgetUI.showToast(`Restored ${result.categoriesCount} categories and ${result.transactionsCount} transactions!`);
+            renderCurrentView();
+          }
+        } catch (err) {
+          alert('Google Drive restore failed: ' + err.message);
+        }
+      });
+    }
+
+    // Synced Local Cloud Folder (iCloud / Dropbox)
+    if (btnSaveCloudFolder && window.BudgetCloud) {
+      btnSaveCloudFolder.addEventListener('click', async () => {
+        try {
+          let passphrase = window.BudgetCloud.getSessionPassphrase();
+          if (window.BudgetCloud.isEncryptionEnabled() && !passphrase) {
+            passphrase = prompt('Enter an encryption passphrase for this backup:');
+            if (passphrase === null) return;
+            if (passphrase) {
+              window.BudgetCloud.setSessionPassphrase(passphrase);
+              if (inputCloudPassphrase) inputCloudPassphrase.value = passphrase;
+            }
+          }
+
+          const res = await window.BudgetCloud.saveToSyncedFolder(passphrase);
+          if (res.success) {
+            window.BudgetUI.showToast(`Saved ${res.filename}!`);
+          }
+        } catch (err) {
+          alert('Folder save failed: ' + err.message);
+        }
+      });
+    }
+
+    // Plain JSON Export
     if (btnExportJSON) {
       btnExportJSON.addEventListener('click', () => {
         const jsonStr = window.BudgetStore.exportDataJSON();
@@ -476,10 +821,36 @@ document.addEventListener('DOMContentLoaded', () => {
         a.download = `budget_backup_${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        window.BudgetUI.showToast('Backup JSON downloaded');
+        window.BudgetUI.showToast('Plain JSON backup downloaded');
       });
     }
 
+    // Encrypted JSON Export
+    if (btnExportEncryptedJSON) {
+      btnExportEncryptedJSON.addEventListener('click', async () => {
+        let passphrase = window.BudgetCloud ? window.BudgetCloud.getSessionPassphrase() : '';
+        if (!passphrase) {
+          passphrase = prompt('Enter a passphrase to encrypt this backup file:');
+          if (!passphrase) return;
+        }
+
+        try {
+          const encStr = await window.BudgetStore.exportData(passphrase);
+          const blob = new Blob([encStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `budget_backup_encrypted_${new Date().toISOString().slice(0, 10)}.enc`;
+          a.click();
+          URL.revokeObjectURL(url);
+          window.BudgetUI.showToast('Encrypted backup downloaded');
+        } catch (err) {
+          alert('Encryption export failed: ' + err.message);
+        }
+      });
+    }
+
+    // CSV Export
     if (btnExportCSV) {
       btnExportCSV.addEventListener('click', () => {
         const csvStr = window.BudgetStore.exportTransactionsCSV();
@@ -494,6 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // JSON / Encrypted Import
     if (btnImportJSON && fileImportInput) {
       btnImportJSON.addEventListener('click', () => fileImportInput.click());
 
@@ -502,12 +874,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
-          const result = window.BudgetStore.importDataJSON(event.target.result);
+        reader.onload = async (event) => {
+          const fileContent = event.target.result;
+          const currentPassphrase = window.BudgetCloud ? window.BudgetCloud.getSessionPassphrase() : null;
+
+          const result = await window.BudgetStore.importDataJSONAsync(fileContent, currentPassphrase);
           if (result.success) {
             updateCurrencyDisplay();
             window.BudgetUI.showToast(`Imported ${result.categoriesCount} categories and ${result.transactionsCount} transactions!`);
             renderCurrentView();
+          } else if (result.needsPassphrase) {
+            openPassphraseModal({ type: 'file', content: fileContent });
           } else {
             alert('Import failed: ' + result.error);
           }
@@ -517,6 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // Reset Data
     if (btnResetData) {
       btnResetData.addEventListener('click', () => {
         if (confirm('Are you sure you want to reset all data back to defaults? All transactions will be cleared.')) {
@@ -527,6 +905,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+
+    // Initialize UI states
+    updateCloudSyncUI();
   }
 
   function updateCurrencyDisplay() {

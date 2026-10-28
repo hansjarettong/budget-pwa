@@ -326,16 +326,47 @@ function exportDataJSON() {
 }
 
 /**
+ * Checks whether a payload is encrypted with BudgetCrypto.
+ * @param {any} data
+ * @returns {boolean}
+ */
+function isEncryptedPayload(data) {
+  const cryptoModule = typeof BudgetCrypto !== 'undefined' ? BudgetCrypto : (typeof require === 'function' ? require('./crypto.js') : null);
+  if (cryptoModule && typeof cryptoModule.isEncryptedPayload === 'function') {
+    return cryptoModule.isEncryptedPayload(data);
+  }
+  if (!data) return false;
+  let obj = data;
+  if (typeof data === 'string') {
+    try {
+      obj = JSON.parse(data);
+    } catch (e) {
+      return false;
+    }
+  }
+  return Boolean(obj && typeof obj === 'object' && obj.encrypted === true && obj.salt && obj.iv && obj.ciphertext);
+}
+
+/**
  * Imports data from JSON string or object.
  * Replaces or merges categories and transactions.
  * @param {string|Object} jsonInput
- * @returns {{ success: boolean, categoriesCount?: number, transactionsCount?: number, error?: string }}
+ * @returns {{ success: boolean, categoriesCount?: number, transactionsCount?: number, isEncrypted?: boolean, needsPassphrase?: boolean, error?: string }}
  */
 function importDataJSON(jsonInput) {
   try {
     const data = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput;
     if (!data || typeof data !== 'object') {
       return { success: false, error: 'Invalid data format: payload must be a JSON object' };
+    }
+
+    if (isEncryptedPayload(data)) {
+      return {
+        success: false,
+        isEncrypted: true,
+        needsPassphrase: true,
+        error: 'This backup is encrypted with a passphrase. Please provide the passphrase to restore.'
+      };
     }
 
     const storage = getStorage();
@@ -383,6 +414,54 @@ function importDataJSON(jsonInput) {
       error: err.message || 'Failed to parse JSON'
     };
   }
+}
+
+/**
+ * Asynchronously imports JSON data with optional decryption passphrase.
+ * @param {string|Object} jsonInput
+ * @param {string} [passphrase]
+ * @returns {Promise<{ success: boolean, categoriesCount?: number, transactionsCount?: number, isEncrypted?: boolean, needsPassphrase?: boolean, error?: string }>}
+ */
+async function importDataJSONAsync(jsonInput, passphrase = null) {
+  if (isEncryptedPayload(jsonInput)) {
+    if (!passphrase) {
+      return {
+        success: false,
+        isEncrypted: true,
+        needsPassphrase: true,
+        error: 'This backup is encrypted. Please enter your passphrase.'
+      };
+    }
+    const cryptoModule = typeof BudgetCrypto !== 'undefined' ? BudgetCrypto : (typeof require === 'function' ? require('./crypto.js') : null);
+    if (!cryptoModule || typeof cryptoModule.decrypt !== 'function') {
+      return { success: false, error: 'Encryption engine (BudgetCrypto) is not available' };
+    }
+    try {
+      const decryptedPlaintext = await cryptoModule.decrypt(jsonInput, passphrase);
+      return importDataJSON(decryptedPlaintext);
+    } catch (err) {
+      return { success: false, isEncrypted: true, error: err.message || 'Decryption failed: Incorrect passphrase' };
+    }
+  }
+  return importDataJSON(jsonInput);
+}
+
+/**
+ * Exports data with optional client-side AES-GCM encryption.
+ * @param {string} [passphrase] - If provided, encrypts the JSON backup
+ * @returns {Promise<string>}
+ */
+async function exportData(passphrase = null) {
+  const plainJSON = exportDataJSON();
+  if (!passphrase) {
+    return plainJSON;
+  }
+  const cryptoModule = typeof BudgetCrypto !== 'undefined' ? BudgetCrypto : (typeof require === 'function' ? require('./crypto.js') : null);
+  if (!cryptoModule || typeof cryptoModule.encrypt !== 'function') {
+    throw new Error('Encryption engine (BudgetCrypto) is not available');
+  }
+  const encryptedPkg = await cryptoModule.encrypt(plainJSON, passphrase);
+  return JSON.stringify(encryptedPkg, null, 2);
 }
 
 /**
@@ -444,6 +523,80 @@ function resetToDefaultData() {
   };
 }
 
+/**
+ * Checks whether persistent storage is currently granted by the browser/OS.
+ * @returns {Promise<boolean>}
+ */
+async function checkStoragePersistence() {
+  if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persisted === 'function') {
+    try {
+      return await navigator.storage.persisted();
+    } catch (err) {
+      console.warn('Persistence status check failed:', err);
+    }
+  }
+  return false;
+}
+
+/**
+ * Requests persistent storage from the browser/OS.
+ * When granted, the browser/OS exempts this site from eviction during low disk space cleanups.
+ * @returns {Promise<boolean>} True if granted, false otherwise.
+ */
+async function requestStoragePersistence() {
+  if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persist === 'function') {
+    try {
+      const isAlreadyPersisted = await navigator.storage.persisted();
+      if (isAlreadyPersisted) {
+        return true;
+      }
+      return await navigator.storage.persist();
+    } catch (err) {
+      console.warn('Storage persistence request failed:', err);
+    }
+  }
+  return false;
+}
+
+/**
+ * Formats a byte number to human-readable string.
+ * @param {number} bytes
+ * @returns {string}
+ */
+function formatBytes(bytes) {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+/**
+ * Retrieves storage usage and quota estimates from the browser StorageManager.
+ * @returns {Promise<{ usage: number, quota: number, percent: number, usageFormatted: string, quotaFormatted: string }|null>}
+ */
+async function getStorageEstimate() {
+  if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.estimate === 'function') {
+    try {
+      const estimate = await navigator.storage.estimate();
+      const usage = estimate.usage || 0;
+      const quota = estimate.quota || 0;
+      const percent = quota > 0 ? Math.min(100, Math.round((usage / quota) * 1000) / 10) : 0;
+
+      return {
+        usage,
+        quota,
+        percent,
+        usageFormatted: formatBytes(usage),
+        quotaFormatted: formatBytes(quota)
+      };
+    } catch (err) {
+      console.warn('Storage estimate failed:', err);
+    }
+  }
+  return null;
+}
+
 // Bundle all store functions and constants
 const BudgetStore = {
   STORAGE_KEYS,
@@ -461,8 +614,15 @@ const BudgetStore = {
   getMonthsWithTransactions,
   exportDataJSON,
   importDataJSON,
+  importDataJSONAsync,
+  exportData,
+  isEncryptedPayload,
   exportTransactionsCSV,
-  resetToDefaultData
+  resetToDefaultData,
+  checkStoragePersistence,
+  requestStoragePersistence,
+  getStorageEstimate,
+  formatBytes
 };
 
 // Expose on globalThis / window for browser script tags

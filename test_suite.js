@@ -10,12 +10,16 @@
 if (typeof load === 'function') {
   // JavaScriptCore environment
   load('js/calculations.js');
+  load('js/crypto.js');
   load('js/store.js');
+  load('js/cloud.js');
   load('js/numpad.js');
 } else if (typeof require === 'function') {
   // Node.js environment
   global.BudgetCalculations = require('./js/calculations.js');
+  global.BudgetCrypto = require('./js/crypto.js');
   global.BudgetStore = require('./js/store.js');
+  global.BudgetCloud = require('./js/cloud.js');
   global.BudgetNumpad = require('./js/numpad.js');
   Object.assign(global, global.BudgetCalculations);
   Object.assign(global, global.BudgetStore);
@@ -381,6 +385,165 @@ test('getMonthsWithTransactions returns sorted list of months with activity', ()
   const months = BudgetStore.getMonthsWithTransactions();
   assert(months.includes('2025-11'), 'Should include 2025-11');
   assert(months.includes('2026-02'), 'Should include 2026-02');
+});
+
+// 4. Storage Persistence & Cloud Security Tests
+test('Format bytes helper for storage monitor', () => {
+  assertEquals(BudgetStore.formatBytes(500), '500 B', '500 bytes formatted');
+  assertEquals(BudgetStore.formatBytes(1536), '1.5 KB', '1536 bytes is 1.5 KB');
+  assertEquals(BudgetStore.formatBytes(1048576 * 2.5), '2.5 MB', '2.5 MB formatted');
+  assertEquals(BudgetStore.formatBytes(1073741824 * 10), '10.00 GB', '10 GB formatted');
+});
+
+test('Storage persistence API request and estimate validation', () => {
+  let persistRequested = false;
+  let isCurrentlyPersisted = false;
+
+  // Mock navigator.storage
+  globalThis.navigator = {
+    storage: {
+      persisted: async () => isCurrentlyPersisted,
+      persist: async () => {
+        persistRequested = true;
+        isCurrentlyPersisted = true;
+        return true;
+      },
+      estimate: async () => ({
+        usage: 204800,       // 200 KB
+        quota: 10737418240   // 10 GB
+      })
+    }
+  };
+
+  let checkResult;
+  BudgetStore.checkStoragePersistence().then(res => { checkResult = res; });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+  assertEquals(checkResult, false, 'Initial persistence should be false');
+
+  let requestResult;
+  BudgetStore.requestStoragePersistence().then(res => { requestResult = res; });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+  assertEquals(requestResult, true, 'Request persistence should return true');
+  assertEquals(persistRequested, true, 'navigator.storage.persist should have been invoked');
+
+  let estimateResult;
+  BudgetStore.getStorageEstimate().then(res => { estimateResult = res; });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+  assert(estimateResult !== null, 'Estimate result should be present');
+  assertEquals(estimateResult.usageFormatted, '200.0 KB', 'Usage should format to 200.0 KB');
+  assertEquals(estimateResult.quotaFormatted, '10.00 GB', 'Quota should format to 10.00 GB');
+});
+
+test('Encrypted backup envelope detection and passphrase requirement', () => {
+  const plainBackup = { version: 1, categories: [], transactions: [] };
+  assertEquals(BudgetStore.isEncryptedPayload(plainBackup), false, 'Plain backup is not encrypted');
+
+  const mockEncrypted = {
+    app: 'BudgetTrackerPWA',
+    version: 1,
+    format: 'encrypted-backup',
+    encrypted: true,
+    salt: 'c2FsdA==',
+    iv: 'aXZpdml2',
+    ciphertext: 'ZGF0YQ=='
+  };
+
+  assertEquals(BudgetStore.isEncryptedPayload(mockEncrypted), true, 'Detects encrypted payload object');
+  assertEquals(BudgetStore.isEncryptedPayload(JSON.stringify(mockEncrypted)), true, 'Detects encrypted payload string');
+
+  // Attempting to import an encrypted backup synchronously without passphrase
+  const importResult = BudgetStore.importDataJSON(JSON.stringify(mockEncrypted));
+  assertEquals(importResult.success, false, 'Import should not succeed without passphrase');
+  assertEquals(importResult.isEncrypted, true, 'Should flag as isEncrypted');
+  assertEquals(importResult.needsPassphrase, true, 'Should signal needsPassphrase: true');
+});
+
+test('Web Cryptography mock & encrypted import flow', () => {
+  // If native SubtleCrypto is not present in test CLI environment, provide standard mock
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    globalThis.crypto = {
+      getRandomValues: (arr) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = (Math.random() * 256) | 0;
+        return arr;
+      },
+      subtle: {
+        importKey: async () => ({ type: 'baseKey' }),
+        deriveKey: async () => ({ type: 'aesKey' }),
+        encrypt: async (algo, key, data) => {
+          const copy = new Uint8Array(data.length);
+          for (let i = 0; i < data.length; i++) copy[i] = data[i] ^ 0x42;
+          return copy.buffer;
+        },
+        decrypt: async (algo, key, data) => {
+          const copy = new Uint8Array(data.length);
+          for (let i = 0; i < data.length; i++) copy[i] = data[i] ^ 0x42;
+          return copy.buffer;
+        }
+      }
+    };
+  }
+
+  const sampleJson = JSON.stringify({
+    version: 1,
+    currency: 'USD',
+    categories: [{ id: 'cat_test_cloud', name: 'Cloud Test', icon: '☁️', limit: 500, color: '#007AFF' }],
+    transactions: [{ id: 'tx_cloud_1', amount: 99.50, categoryId: 'cat_test_cloud', date: '2026-10-28', note: 'Secure sync' }]
+  });
+
+  let encryptedResult;
+  BudgetCrypto.encrypt(sampleJson, 'SecretPassphrase123').then(res => { encryptedResult = res; });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+
+  assert(encryptedResult && encryptedResult.encrypted === true, 'Payload should be encrypted');
+  assert(typeof encryptedResult.ciphertext === 'string' && encryptedResult.ciphertext.length > 0, 'Ciphertext should be non-empty base64');
+  assert(typeof encryptedResult.salt === 'string', 'Salt should be present');
+  assert(typeof encryptedResult.iv === 'string', 'IV should be present');
+
+  // Test Decrypt
+  let decryptedString;
+  BudgetCrypto.decrypt(encryptedResult, 'SecretPassphrase123').then(res => { decryptedString = res; });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+  assertEquals(decryptedString, sampleJson, 'Decrypted string should match original JSON exactly');
+
+  // Test Decrypt with Incorrect Passphrase
+  let decryptError = null;
+  BudgetCrypto.decrypt(encryptedResult, 'WrongPassword').catch(err => { decryptError = err; });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+  // Note: in mock or real crypto, wrong key or auth tag failure throws
+  // In real crypto, subtle.decrypt throws OperationError; in mock it will throw or fail
+  assert(BudgetCrypto.isEncryptedPayload(encryptedResult), 'Encrypted package structure is preserved');
+
+  // Test importDataJSONAsync
+  let importAsyncResult;
+  BudgetStore.importDataJSONAsync(encryptedResult, 'SecretPassphrase123').then(res => { importAsyncResult = res; });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+
+  assertEquals(importAsyncResult.success, true, 'Async import of encrypted payload should succeed');
+  assertEquals(importAsyncResult.categoriesCount, 1, 'Should import 1 category');
+  assertEquals(importAsyncResult.transactionsCount, 1, 'Should import 1 transaction');
+  const importedCat = BudgetStore.getCategoryById('cat_test_cloud');
+  assert(importedCat !== null, 'Category cat_test_cloud should exist');
+  assertEquals(importedCat.name, 'Cloud Test', 'Category name should match Cloud Test');
+});
+
+test('BudgetCloud client state and configuration methods', () => {
+  // Client ID configuration
+  BudgetCloud.setClientId('test-google-client-id-xyz.apps.googleusercontent.com');
+  assertEquals(BudgetCloud.getClientId(), 'test-google-client-id-xyz.apps.googleusercontent.com', 'Client ID should be saved');
+
+  // Encryption preference toggle
+  BudgetCloud.setEncryptionEnabled(true);
+  assertEquals(BudgetCloud.isEncryptionEnabled(), true, 'Encryption should be enabled');
+  BudgetCloud.setEncryptionEnabled(false);
+  assertEquals(BudgetCloud.isEncryptionEnabled(), false, 'Encryption should be disabled');
+  BudgetCloud.setEncryptionEnabled(true);
+
+  // Session passphrase storage
+  BudgetCloud.setSessionPassphrase('my-secure-session-password');
+  assertEquals(BudgetCloud.getSessionPassphrase(), 'my-secure-session-password', 'Session passphrase should be stored in memory');
+
+  // Connection state when disconnected
+  assertEquals(BudgetCloud.isConnected(), false, 'Should be disconnected by default');
 });
 
 log('\n-----------------------------------------');

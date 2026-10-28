@@ -4,7 +4,7 @@
  * Includes sanitization for Safari/WebKit redirected navigation responses.
  */
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `budget-tracker-${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
@@ -12,11 +12,13 @@ const PRECACHE_ASSETS = [
   './manifest.json',
   './css/app.css',
   './css/components.css',
-  './js/app.js',
+  './js/crypto.js',
   './js/store.js',
+  './js/cloud.js',
   './js/calculations.js',
   './js/ui.js',
   './js/numpad.js',
+  './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
@@ -94,6 +96,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Only intercept GET requests (skip mutations / non-GET)
   if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Bypass cache for external APIs (e.g. Google Identity, Google Drive API)
+  if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
 

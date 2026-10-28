@@ -90,22 +90,129 @@
           </select>
         </div>
 
+        <!-- Layer 1: Device Storage Durability (Default & Automatic) -->
+        <div class="settings-section-card">
+          <div class="settings-header-badge-row">
+            <h3 class="settings-card-title" style="margin-bottom: 0;">Storage Durability</h3>
+            <span class="status-pill neutral" id="storageStatusBadge">
+              <span id="storageStatusDot">●</span>
+              <span id="storageStatusText">Checking...</span>
+            </span>
+          </div>
+          <p id="storageStatusDesc" style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
+            Requests persistent device storage from your browser so budget data is never evicted during low disk space cleanups.
+          </p>
+          <div class="storage-meter-wrap" id="storageMeterWrap" style="display: none;">
+            <div class="storage-meter-labels">
+              <span>App Storage Used</span>
+              <span id="storageUsageRatio">0 KB / 0 GB</span>
+            </div>
+            <div class="storage-progress-track">
+              <div class="storage-progress-fill" id="storageProgressFill" style="width: 0%;"></div>
+            </div>
+          </div>
+          <button class="settings-btn" id="btnRequestPersistence" style="display: none;">
+            <span>Enable Storage Protection</span>
+            <span>🛡️</span>
+          </button>
+        </div>
+
+        <!-- Layer 2: Cloud Backup & Sync (Bring Your Own Cloud - Optional) -->
+        <div class="settings-section-card">
+          <div class="settings-header-badge-row">
+            <h3 class="settings-card-title" style="margin-bottom: 0;">Cloud Backup & Sync</h3>
+            <span class="status-pill neutral" id="cloudStatusBadge">
+              <span id="cloudStatusDot">●</span>
+              <span id="cloudStatusText">Disconnected</span>
+            </span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;">
+            Optional & serverless. Syncs directly with your personal Google Drive or saves an encrypted file to your iCloud/Dropbox.
+          </p>
+
+          <!-- Client-Side Zero-Knowledge Encryption Settings -->
+          <div style="background-color: var(--bg-primary); border: 1px solid var(--separator); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <label for="chkCloudEncryption" style="font-size: 13px; font-weight: 700; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <span>🔒 Encrypt Backups (AES-256)</span>
+              </label>
+              <input type="checkbox" id="chkCloudEncryption" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-blue);">
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px;">
+              Data is encrypted on your device with AES-256 before leaving your phone. Nobody (not even Google) can view your expenses without your passphrase.
+            </p>
+            <div class="passphrase-input-container" id="cloudPassphraseGroup">
+              <input type="password" id="inputCloudPassphrase" class="sheet-input-field" placeholder="Set backup encryption passphrase" style="font-size: 14px; margin-bottom: 0;">
+              <button type="button" class="btn-eye-toggle" id="btnTogglePassphraseVisibility" aria-label="Toggle password visibility">👁️</button>
+            </div>
+          </div>
+
+          <!-- Google Drive Actions -->
+          <div class="settings-btn-group">
+            <button class="settings-btn" id="btnConnectGDrive">
+              <span id="btnConnectGDriveText">Connect Google Drive</span>
+              <span>☁️</span>
+            </button>
+            <button class="settings-btn" id="btnBackupGDrive" style="display: none;">
+              <span>Backup to Google Drive Now</span>
+              <span>⬆️</span>
+            </button>
+            <button class="settings-btn" id="btnRestoreGDrive" style="display: none;">
+              <span>Restore from Google Drive</span>
+              <span>⬇️</span>
+            </button>
+            <button class="settings-btn" id="btnSaveCloudFolder">
+              <span>Save Encrypted File (iCloud / Dropbox)</span>
+              <span>📁</span>
+            </button>
+          </div>
+
+          <!-- Last Sync Timestamp -->
+          <div class="settings-sync-timestamp" id="cloudLastSyncRow" style="display: none;">
+            <span>🕒 Last Synced:</span>
+            <span id="cloudLastSyncTime">Never</span>
+          </div>
+
+          <!-- Google Cloud Client ID Configuration Accordion -->
+          <details class="settings-accordion" id="gdriveConfigAccordion">
+            <summary class="settings-accordion-summary">⚙️ Google OAuth Client ID Settings</summary>
+            <div class="settings-accordion-content">
+              <p style="margin-bottom: 8px;">
+                Google Drive requires a free OAuth 2.0 Web Client ID authorized for your domain. Enter your Google Client ID below:
+              </p>
+              <input type="text" class="sheet-input-field" id="inputGDriveClientId" placeholder="e.g. 123456789-abc.apps.googleusercontent.com" style="font-size: 13px; margin-bottom: 8px;">
+              <button class="settings-btn" id="btnSaveGDriveClientId" style="margin-bottom: 12px; justify-content: center; font-size: 13px;">Save Client ID</button>
+              <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+                <strong>Quick 2-Minute Setup:</strong><br>
+                1. Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color: var(--accent-blue);">Google Cloud Console</a>.<br>
+                2. Create an OAuth 2.0 Client ID for "Web Application".<br>
+                3. Add your app's origin URL (<code id="currentOriginCode"></code>) to <em>Authorized JavaScript Origins</em>.<br>
+                4. Paste your Client ID above and tap Save!
+              </p>
+            </div>
+          </details>
+        </div>
+
         <div class="settings-section-card">
           <h3 class="settings-card-title">Data Backup & Export</h3>
           <div class="settings-btn-group">
             <button class="settings-btn" id="btnExportJSON">
-              <span>Backup Data (JSON)</span>
+              <span>Backup Plain Data (JSON)</span>
               <span>💾</span>
+            </button>
+            <button class="settings-btn" id="btnExportEncryptedJSON">
+              <span>Backup Encrypted (JSON)</span>
+              <span>🔐</span>
             </button>
             <button class="settings-btn" id="btnExportCSV">
               <span>Export Expenses (CSV)</span>
               <span>📊</span>
             </button>
             <button class="settings-btn" id="btnImportJSON">
-              <span>Restore from Backup (JSON)</span>
+              <span>Restore from Backup (JSON / ENC)</span>
               <span>📂</span>
             </button>
-            <input type="file" id="fileImportInput" accept=".json" style="display: none;">
+            <input type="file" id="fileImportInput" accept=".json,.enc" style="display: none;">
           </div>
         </div>
 
@@ -264,13 +371,34 @@
       </div>
     </div>
 
+    <!-- Passphrase Unlock Modal (for restoring encrypted files) -->
+    <div class="modal-overlay" id="passphraseModal">
+      <div class="bottom-sheet">
+        <div class="sheet-handle-bar"></div>
+        <div class="sheet-header">
+          <h3 class="sheet-title">Enter Backup Passphrase</h3>
+          <button class="sheet-close-btn" id="btnPassphraseModalClose" aria-label="Close">✕</button>
+        </div>
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 14px;">
+          This backup is protected with AES-256 encryption. Enter the passphrase that was used when this backup was created.
+        </p>
+        <div class="passphrase-input-container" style="margin-bottom: 16px;">
+          <input type="password" id="modalPassphraseInput" class="sheet-input-field" placeholder="Enter encryption passphrase">
+          <button type="button" class="btn-eye-toggle" id="btnModalPassphraseToggle" aria-label="Toggle password visibility">👁️</button>
+        </div>
+        <button class="sheet-submit-btn" id="btnModalPassphraseSubmit">Unlock & Restore Data</button>
+      </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div class="toast-container" id="toastContainer"></div>
   </div>
 
   <!-- Application Logic Scripts -->
-  <script src="./js/calculations.js"></script>
+  <script src="./js/crypto.js"></script>
   <script src="./js/store.js"></script>
+  <script src="./js/cloud.js"></script>
+  <script src="./js/calculations.js"></script>
   <script src="./js/numpad.js"></script>
   <script src="./js/ui.js"></script>
   <script src="./js/app.js"></script>

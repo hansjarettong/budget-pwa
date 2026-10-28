@@ -4,8 +4,9 @@
  * Includes sanitization for Safari/WebKit redirected navigation responses.
  */
 
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `budget-tracker-${CACHE_VERSION}`;
+const OCR_CACHE_NAME = 'budget-ocr-v1';
 
 const PRECACHE_ASSETS = [
   './',
@@ -18,6 +19,8 @@ const PRECACHE_ASSETS = [
   './js/calculations.js',
   './js/ui.js',
   './js/numpad.js',
+  './js/ocr-engine.js',
+  './js/receipt-parser.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -99,6 +102,40 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const reqUrl = event.request.url;
+
+  // Cache-First runtime caching for external OCR assets (Tesseract.js script, worker, WASM, and traineddata models)
+  const isOcrAsset = reqUrl.includes('cdn.jsdelivr.net') ||
+    reqUrl.includes('tessdata');
+
+  if (isOcrAsset) {
+    event.respondWith(
+      caches.open(OCR_CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && (networkResponse.ok || networkResponse.type === 'opaque')) {
+            const cleanToCache = networkResponse.redirected
+              ? createCleanResponse(networkResponse.clone())
+              : networkResponse.clone();
+            await cache.put(event.request, cleanToCache);
+          }
+          return networkResponse.redirected
+            ? createCleanResponse(networkResponse)
+            : networkResponse;
+        } catch (error) {
+          console.warn('[Service Worker] OCR asset fetch failed offline:', reqUrl, error);
+          throw error;
+        }
+      })
+    );
+    return;
+  }
+
   // Bypass cache for external APIs (e.g. Google Identity, Google Drive API)
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
@@ -111,8 +148,8 @@ self.addEventListener('fetch', (event) => {
         try {
           // Check cache for matching request or root shell
           const cachedResponse = await caches.match(event.request) ||
-                                 await caches.match('./') ||
-                                 await caches.match('./index.html');
+            await caches.match('./') ||
+            await caches.match('./index.html');
           if (cachedResponse) {
             // Strip any internal WebKit redirect flags before returning
             return createCleanResponse(cachedResponse);

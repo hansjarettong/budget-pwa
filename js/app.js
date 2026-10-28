@@ -219,6 +219,144 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateInput = document.getElementById('expenseDateInput');
     const noteInput = document.getElementById('expenseNoteInput');
 
+    // Receipt Scanning OCR Elements & Action Sheet Modal
+    const scanBtn = document.getElementById('btnQuickAddScan');
+    const cameraInput = document.getElementById('receiptCameraInput');
+    const galleryInput = document.getElementById('receiptGalleryInput');
+    const ocrScanningBanner = document.getElementById('ocrScanningBanner');
+    const ocrStatusTitle = document.getElementById('ocrStatusTitle');
+    const ocrStatusSubtitle = document.getElementById('ocrStatusSubtitle');
+    const ocrProgressBar = document.getElementById('ocrProgressBar');
+
+    const sourceModal = document.getElementById('receiptSourceModal');
+    const btnActionTakePhoto = document.getElementById('btnActionTakePhoto');
+    const btnActionChooseGallery = document.getElementById('btnActionChooseGallery');
+    const btnActionCancel = document.getElementById('btnActionCancel');
+
+    const openSourceModal = () => {
+      if (sourceModal) sourceModal.classList.add('open');
+    };
+
+    const closeSourceModal = () => {
+      if (sourceModal) sourceModal.classList.remove('open');
+    };
+
+    if (scanBtn) {
+      scanBtn.addEventListener('click', openSourceModal);
+    }
+
+    if (btnActionTakePhoto && cameraInput) {
+      btnActionTakePhoto.addEventListener('click', () => {
+        closeSourceModal();
+        cameraInput.click();
+      });
+    }
+
+    if (btnActionChooseGallery && galleryInput) {
+      btnActionChooseGallery.addEventListener('click', () => {
+        closeSourceModal();
+        galleryInput.click();
+      });
+    }
+
+    if (btnActionCancel) {
+      btnActionCancel.addEventListener('click', closeSourceModal);
+    }
+
+    if (sourceModal) {
+      sourceModal.addEventListener('click', (e) => {
+        if (e.target === sourceModal) closeSourceModal();
+      });
+    }
+
+    const handleReceiptFileChange = async (event) => {
+      const input = event.target;
+      const file = input && input.files && input.files[0];
+      if (!file) return;
+
+      // Show inline progress banner & reset progress state
+      if (ocrScanningBanner) {
+        ocrScanningBanner.style.display = 'flex';
+      }
+      if (ocrStatusTitle) {
+        ocrStatusTitle.textContent = 'Scanning receipt...';
+      }
+      if (ocrStatusSubtitle) {
+        const isHeic = window.BudgetOCR && typeof window.BudgetOCR.isHeicImage === 'function' && window.BudgetOCR.isHeicImage(file);
+        ocrStatusSubtitle.textContent = isHeic ? 'Converting iPhone HEIC photo...' : 'Preparing photo...';
+      }
+      if (ocrProgressBar) {
+        ocrProgressBar.style.width = '0%';
+      }
+
+      try {
+        if (!window.BudgetOCR || typeof window.BudgetOCR.preprocessImage !== 'function') {
+          throw new Error('OCR engine is not loaded. Please check your internet connection.');
+        }
+
+        const prep = await window.BudgetOCR.preprocessImage(file);
+
+        if (ocrStatusSubtitle) {
+          ocrStatusSubtitle.textContent = 'Reading receipt text...';
+        }
+
+        const result = await window.BudgetOCR.recognizeReceipt(prep.canvas, (p) => {
+          if (ocrProgressBar) {
+            ocrProgressBar.style.width = `${p.progress || 0}%`;
+          }
+          if (ocrStatusSubtitle) {
+            ocrStatusSubtitle.textContent = p.message || 'Scanning receipt...';
+          }
+        });
+
+        if (!window.ReceiptParser || typeof window.ReceiptParser.parseReceiptText !== 'function') {
+          throw new Error('Receipt parser module is not loaded.');
+        }
+
+        const parsed = window.ReceiptParser.parseReceiptText(
+          result.text,
+          window.BudgetStore.getCategories(),
+          window.BudgetStore.getCurrency()
+        );
+
+        // Update Quick Add inputs with recognized receipt fields
+        if (parsed.amount > 0) {
+          numpad.setAmount(parsed.amount);
+        }
+        if (parsed.date && dateInput) {
+          dateInput.value = parsed.date;
+        }
+        if (parsed.merchant && noteInput) {
+          noteInput.value = parsed.merchant;
+        }
+        if (parsed.categoryId) {
+          selectedCategoryId = parsed.categoryId;
+          window.BudgetUI.renderQuickAddChips(selectedCategoryId, 'quickAddChipsContainer', (catId) => {
+            selectedCategoryId = catId;
+          });
+        }
+
+        window.BudgetUI.showToast('Receipt scanned! Review & tap Save.');
+      } catch (err) {
+        console.error('Receipt scanning failed:', err);
+        window.BudgetUI.showToast(err.message || 'Failed to scan receipt. Please enter manually.');
+      } finally {
+        if (ocrScanningBanner) {
+          ocrScanningBanner.style.display = 'none';
+        }
+        if (input) {
+          input.value = '';
+        }
+      }
+    };
+
+    if (cameraInput) {
+      cameraInput.addEventListener('change', handleReceiptFileChange);
+    }
+    if (galleryInput) {
+      galleryInput.addEventListener('change', handleReceiptFileChange);
+    }
+
     // Open from FAB
     if (fabBtn) {
       fabBtn.addEventListener('click', () => openQuickAddModal());
@@ -291,6 +429,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlay = document.getElementById('quickAddModal');
     const dateInput = document.getElementById('expenseDateInput');
     const noteInput = document.getElementById('expenseNoteInput');
+    const ocrScanningBanner = document.getElementById('ocrScanningBanner');
+    if (ocrScanningBanner) ocrScanningBanner.style.display = 'none';
 
     numpad.reset();
     if (noteInput) noteInput.value = '';
@@ -317,6 +457,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeQuickAddModal() {
     const overlay = document.getElementById('quickAddModal');
     if (overlay) overlay.classList.remove('open');
+    const sourceModal = document.getElementById('receiptSourceModal');
+    if (sourceModal) sourceModal.classList.remove('open');
+    const ocrScanningBanner = document.getElementById('ocrScanningBanner');
+    if (ocrScanningBanner) ocrScanningBanner.style.display = 'none';
   }
 
   // ==========================================================================

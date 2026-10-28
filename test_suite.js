@@ -14,6 +14,8 @@ if (typeof load === 'function') {
   load('js/store.js');
   load('js/cloud.js');
   load('js/numpad.js');
+  load('js/ocr-engine.js');
+  load('js/receipt-parser.js');
 } else if (typeof require === 'function') {
   // Node.js environment
   global.BudgetCalculations = require('./js/calculations.js');
@@ -21,8 +23,11 @@ if (typeof load === 'function') {
   global.BudgetStore = require('./js/store.js');
   global.BudgetCloud = require('./js/cloud.js');
   global.BudgetNumpad = require('./js/numpad.js');
+  global.BudgetOCR = require('./js/ocr-engine.js');
+  global.ReceiptParser = require('./js/receipt-parser.js');
   Object.assign(global, global.BudgetCalculations);
   Object.assign(global, global.BudgetStore);
+  Object.assign(global, global.ReceiptParser);
 }
 
 let passed = 0;
@@ -544,6 +549,423 @@ test('BudgetCloud client state and configuration methods', () => {
 
   // Connection state when disconnected
   assertEquals(BudgetCloud.isConnected(), false, 'Should be disconnected by default');
+});
+
+// 23. BudgetOCR Client-Side Engine Tests
+test('BudgetOCR dimensions calculation and scaling', () => {
+  assert(typeof BudgetOCR === 'object', 'BudgetOCR should be exported as an object');
+  assert(typeof BudgetOCR.preprocessImage === 'function', 'preprocessImage should be a function');
+  assert(typeof BudgetOCR.initWorker === 'function', 'initWorker should be a function');
+  assert(typeof BudgetOCR.recognizeReceipt === 'function', 'recognizeReceipt should be a function');
+  assert(typeof BudgetOCR.terminateWorker === 'function', 'terminateWorker should be a function');
+
+  // Landscape image scaling (> 1600px)
+  const dLandscape = BudgetOCR.calculateDimensions(3200, 2400, 1600);
+  assertEquals(dLandscape.width, 1600, 'Landscape width scaled to 1600');
+  assertEquals(dLandscape.height, 1200, 'Landscape height scaled proportionally to 1200');
+
+  // Portrait image scaling (> 1600px)
+  const dPortrait = BudgetOCR.calculateDimensions(1800, 3600, 1600);
+  assertEquals(dPortrait.width, 800, 'Portrait width scaled proportionally to 800');
+  assertEquals(dPortrait.height, 1600, 'Portrait height scaled to 1600');
+
+  // Image under 1600px preserves exact original dimensions
+  const dOriginal = BudgetOCR.calculateDimensions(800, 600, 1600);
+  assertEquals(dOriginal.width, 800, 'Width preserved when under max limit');
+  assertEquals(dOriginal.height, 600, 'Height preserved when under max limit');
+
+  // Thumbnail scaling (~120px)
+  const dThumb = BudgetOCR.calculateDimensions(1600, 1200, 120);
+  assertEquals(dThumb.width, 120, 'Thumbnail width scaled to 120');
+  assertEquals(dThumb.height, 90, 'Thumbnail height scaled to 90');
+});
+
+test('BudgetOCR progress formatter translates events into friendly messages', () => {
+  // Loading Core
+  const p1 = BudgetOCR.formatProgress({ status: 'loading tesseract core', progress: 0.5 });
+  assertEquals(p1.progress, 50, 'Progress percentage should be 50');
+  assert(p1.message.includes('Loading OCR engine'), 'Friendly message for loading core');
+
+  // Initializing API
+  const p2 = BudgetOCR.formatProgress({ status: 'initializing tesseract', progress: 0.8 });
+  assertEquals(p2.progress, 80, 'Progress percentage should be 80');
+  assert(p2.message.includes('Initializing OCR engine'), 'Friendly message for initializing');
+
+  // Loading Language Models
+  const p3 = BudgetOCR.formatProgress({ status: 'loading language traineddata', progress: 0.6 });
+  assertEquals(p3.progress, 60, 'Progress percentage should be 60');
+  assert(p3.message.includes('English & Japanese models'), 'Friendly message for models');
+
+  // Recognizing Text
+  const p4 = BudgetOCR.formatProgress({ status: 'recognizing text', progress: 0.72 });
+  assertEquals(p4.progress, 72, 'Progress percentage should be 72');
+  assert(p4.message.includes('Reading receipt text (72%)'), 'Friendly message for recognizing');
+});
+
+test('BudgetOCR initWorker throws friendly error when Tesseract CDN is missing', () => {
+  let thrown = false;
+  let message = '';
+  // Ensure global Tesseract is undefined for this test
+  const savedTesseract = globalThis.Tesseract;
+  delete globalThis.Tesseract;
+
+  BudgetOCR.initWorker().catch(err => {
+    thrown = true;
+    message = err.message;
+  });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+
+  assertEquals(thrown, true, 'initWorker should reject when Tesseract is undefined');
+  assertEquals(message, 'OCR engine is not loaded. Please check your internet connection.', 'Friendly error message');
+
+  // Restore if needed
+  if (savedTesseract) globalThis.Tesseract = savedTesseract;
+});
+
+test('BudgetOCR worker lifecycle, singleton reuse, and recognizeReceipt', () => {
+  let createWorkerCalls = 0;
+  let workerTerminated = false;
+  let capturedLogger = null;
+
+  const mockWorker = {
+    loadLanguage: () => Promise.resolve(),
+    initialize: () => Promise.resolve(),
+    recognize: (source) => Promise.resolve({
+      data: {
+        text: 'Lawson Shinjuku\nTotal: ¥2,480',
+        confidence: 96.2,
+        lines: [
+          { text: 'Lawson Shinjuku', confidence: 98 },
+          { text: 'Total: ¥2,480', confidence: 95 }
+        ]
+      }
+    }),
+    terminate: () => {
+      workerTerminated = true;
+      return Promise.resolve();
+    }
+  };
+
+  globalThis.Tesseract = {
+    createWorker: (langs, oem, options) => {
+      createWorkerCalls++;
+      if (options && options.logger) capturedLogger = options.logger;
+      return Promise.resolve(mockWorker);
+    }
+  };
+
+  const progressEvents = [];
+  let initSuccess = false;
+
+  BudgetOCR.initWorker({
+    onProgress: (p) => progressEvents.push(p)
+  }).then(() => {
+    initSuccess = true;
+  });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+
+  assertEquals(initSuccess, true, 'Worker initialized successfully');
+  assertEquals(createWorkerCalls, 1, 'Tesseract.createWorker called once');
+  assertEquals(BudgetOCR.isWorkerReady(), true, 'Worker reports ready');
+
+  // Verify progress logging
+  if (capturedLogger) {
+    capturedLogger({ status: 'recognizing text', progress: 0.55 });
+    assertEquals(progressEvents.length, 1, 'Progress callback fired');
+    assertEquals(progressEvents[0].progress, 55, 'Progress value formatted');
+  }
+
+  // Second init call -> verifies singleton reuse
+  BudgetOCR.initWorker();
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+  assertEquals(createWorkerCalls, 1, 'Worker singleton reused without re-creating worker');
+
+  // Recognize receipt
+  let recognizedResult = null;
+  BudgetOCR.recognizeReceipt({ canvas: 'mock-canvas' }).then(res => {
+    recognizedResult = res;
+  });
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+
+  assert(recognizedResult !== null, 'Recognition result returned');
+  assertEquals(recognizedResult.text, 'Lawson Shinjuku\nTotal: ¥2,480', 'Text matched');
+  assertEquals(recognizedResult.confidence, 96.2, 'Confidence matched');
+  assertEquals(recognizedResult.lines.length, 2, 'Line entries matched');
+
+  // Terminate worker
+  BudgetOCR.terminateWorker();
+  if (typeof drainMicrotasks === 'function') drainMicrotasks();
+
+  assertEquals(workerTerminated, true, 'worker.terminate was invoked');
+  assertEquals(BudgetOCR.isWorkerReady(), false, 'isWorkerReady is false after termination');
+});
+
+// 24. Receipt Parser Unit & Logic Tests
+BudgetStore.resetToDefaultData();
+test('Japanese receipt OCR text parsing (セブン-イレブン, 合計 ¥3,480, 2026年10月28日, Groceries)', () => {
+  const categories = BudgetStore.getCategories();
+  const sampleText = [
+    'セブン-イレブン 渋谷店',
+    '東京都渋谷区道玄坂2-1-1',
+    'TEL: 03-1234-5678',
+    '2026年10月28日 12:45',
+    'おにぎり 鮭 ¥150',
+    '緑茶 500ml ¥130',
+    'サンドイッチ ¥320',
+    '小計 ¥600',
+    '消費税(10%) ¥60',
+    '合計 ¥3,480',
+    'お預り ¥5,000',
+    'お釣り ¥1,520'
+  ].join('\n');
+
+  const result = ReceiptParser.parseReceiptText(sampleText, categories, 'JPY');
+
+  assertEquals(result.amount, 3480, 'Amount should match 3480 JPY from 合計 ¥3,480');
+  assertEquals(result.date, '2026-10-28', 'Date should be normalized to 2026-10-28');
+  assertEquals(result.merchant, 'セブン-イレブン', 'Merchant branch should be stripped to セブン-イレブン');
+  assertEquals(result.categoryId, 'cat_groceries', 'Category should match cat_groceries');
+  assert(result.confidence >= 0.8, 'Confidence should be high for complete receipt: ' + result.confidence);
+  assertEquals(result.rawLines.length, 12, 'Raw non-empty lines should be preserved');
+});
+
+test('Western receipt OCR text parsing (Trader Joe\'s, TOTAL $45.20, 10/28/2026, Groceries)', () => {
+  const categories = BudgetStore.getCategories();
+  const sampleText = [
+    'Trader Joe\'s Store #123',
+    '123 Market Street',
+    '(555) 345-6789',
+    '10/28/2026 14:20',
+    'Organic Whole Milk 4.29',
+    'Bananas 1.99',
+    'Sourdough Bread 3.99',
+    'SUBTOTAL $10.27',
+    'TAX $0.85',
+    'TOTAL $45.20',
+    'CASH $50.00',
+    'CHANGE $4.80'
+  ].join('\n');
+
+  const result = ReceiptParser.parseReceiptText(sampleText, categories, 'USD');
+
+  assertEquals(result.amount, 45.2, 'Amount should match 45.20 USD from TOTAL $45.20');
+  assertEquals(result.date, '2026-10-28', 'Date 10/28/2026 should be normalized to 2026-10-28');
+  assertEquals(result.merchant, 'Trader Joe\'s', 'Store number should be stripped to Trader Joe\'s');
+  assertEquals(result.categoryId, 'cat_groceries', 'Category should match cat_groceries');
+  assert(result.confidence >= 0.8, 'Confidence should be high: ' + result.confidence);
+});
+
+test('Dining / Coffee receipt parsing (Starbucks Coffee, ¥ 650, Dining)', () => {
+  const categories = BudgetStore.getCategories();
+  const sampleText = [
+    'Starbucks Coffee',
+    '渋谷道玄坂店',
+    '2026/10/28 09:15',
+    'ドリップコーヒー ¥ 350',
+    'カフェラテ ¥ 650',
+    '合計 ¥ 650'
+  ].join('\n');
+
+  const result = ReceiptParser.parseReceiptText(sampleText, categories, 'JPY');
+
+  assertEquals(result.amount, 650, 'Amount should match 650 JPY from 合計 ¥ 650');
+  assertEquals(result.date, '2026-10-28', 'Date 2026/10/28 should normalize to 2026-10-28');
+  assertEquals(result.merchant, 'Starbucks Coffee', 'Merchant should be Starbucks Coffee');
+  assertEquals(result.categoryId, 'cat_dining', 'Category should match cat_dining');
+  assert(result.confidence >= 0.8, 'Confidence should be high: ' + result.confidence);
+});
+
+test('Transport receipt parsing (taxi & gas station, Transport)', () => {
+  const categories = BudgetStore.getCategories();
+
+  // Taxi receipt
+  const taxiText = [
+    'MK TAXI',
+    '2026-10-28 22:30',
+    'タクシーメーター運賃 ¥2,800',
+    '深夜割増 ¥600',
+    '合計 ¥3,400'
+  ].join('\n');
+
+  const taxiResult = ReceiptParser.parseReceiptText(taxiText, categories, 'JPY');
+  assertEquals(taxiResult.amount, 3400, 'Taxi amount should be 3400');
+  assertEquals(taxiResult.date, '2026-10-28', 'Date should be 2026-10-28');
+  assertEquals(taxiResult.merchant, 'MK TAXI', 'Merchant should be MK TAXI');
+  assertEquals(taxiResult.categoryId, 'cat_transport', 'Taxi should map to cat_transport');
+
+  // Gas station receipt
+  const gasText = [
+    'ENEOS 渋谷SS',
+    '給油 レギュラー ガソリン 20L',
+    '2026.10.28',
+    'ご請求額 ¥3,400'
+  ].join('\n');
+
+  const gasResult = ReceiptParser.parseReceiptText(gasText, categories, 'JPY');
+  assertEquals(gasResult.amount, 3400, 'Gas station amount should be 3400');
+  assertEquals(gasResult.merchant, 'ENEOS', 'Branch SS stripped to ENEOS');
+  assertEquals(gasResult.categoryId, 'cat_transport', 'Gas should map to cat_transport');
+});
+
+test('Edge cases: Receipt without explicit date defaults to today', () => {
+  const categories = BudgetStore.getCategories();
+  const sampleText = [
+    'FamilyMart',
+    'おにぎり ¥150',
+    '合計 ¥150'
+  ].join('\n');
+
+  const result = ReceiptParser.parseReceiptText(sampleText, categories);
+  const now = new Date();
+  const expectedToday = String(now.getFullYear()).padStart(4, '0') + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+
+  assertEquals(result.amount, 150, 'Amount should be 150');
+  assertEquals(result.date, expectedToday, 'Date should default to today: ' + expectedToday);
+  assertEquals(result.merchant, 'FamilyMart', 'Merchant should be FamilyMart');
+  assertEquals(result.categoryId, 'cat_groceries', 'Category should match cat_groceries');
+});
+
+test('Edge cases: Receipt with European comma decimal (18,50 €)', () => {
+  const categories = BudgetStore.getCategories();
+  const sampleText = [
+    'Boulangerie Paul',
+    '10 Rue de la Paix',
+    '28/10/2026',
+    'Croissant 2,50 €',
+    'Café Crème 3,00 €',
+    'TOTAL 18,50 €'
+  ].join('\n');
+
+  const result = ReceiptParser.parseReceiptText(sampleText, categories, 'EUR');
+
+  assertEquals(result.amount, 18.5, 'European comma decimal 18,50 € should parse to 18.5');
+  assertEquals(result.date, '2026-10-28', 'Date 28/10/2026 should normalize to 2026-10-28');
+  assertEquals(result.merchant, 'Boulangerie Paul', 'Merchant should be Boulangerie Paul');
+  assertEquals(result.categoryId, 'cat_dining', 'Category should match cat_dining');
+});
+
+test('Edge cases: Tax/change exclusion, header noise stripping, and lower-half fallback', () => {
+  const categories = BudgetStore.getCategories();
+
+  // Receipt with header noise and fallback amount in lower half
+  const sampleText = [
+    '*** TAX INVOICE ***',
+    '領収書',
+    'Corner Bakery',
+    'www.cornerbakery.com',
+    'TEL: 03-9999-9999',
+    '2026年10月28日',
+    'Bread 4.50',
+    'Cookies 5.50',
+    '10.00'
+  ].join('\n');
+
+  const result = ReceiptParser.parseReceiptText(sampleText, categories, 'USD');
+
+  assertEquals(result.merchant, 'Corner Bakery', 'Should skip invoice title and URL noise to find Corner Bakery');
+  assertEquals(result.amount, 10, 'Should fall back to largest number in lower half: 10');
+  assertEquals(result.date, '2026-10-28', 'Date should be 2026-10-28');
+});
+
+test('Receipt parser date format variations and year clamping', () => {
+  const curYear = new Date().getFullYear();
+
+  // Japanese year/month/day
+  assertEquals(ReceiptParser.extractReceiptDate(['2026年5月3日']).date, '2026-05-03', 'Japanese single digit M and D');
+  // Text month
+  assertEquals(ReceiptParser.extractReceiptDate(['Oct 28 2026']).date, '2026-10-28', 'Text month Oct 28 2026');
+  assertEquals(ReceiptParser.extractReceiptDate(['28 October 2026']).date, '2026-10-28', 'Day first text month');
+  // Slash with dash
+  assertEquals(ReceiptParser.extractReceiptDate(['10-28-2026']).date, '2026-10-28', 'Dashed MM-DD-YYYY');
+
+  // Year clamping: < 2000 clamped to 2000
+  assertEquals(ReceiptParser.extractReceiptDate(['1990/01/15']).date, '2000-01-15', 'Year 1990 clamped to 2000');
+  // Year clamping: > curYear + 1 clamped to curYear + 1
+  const maxYear = curYear + 1;
+  assertEquals(ReceiptParser.extractReceiptDate(['2050/12/31']).date, `${maxYear}-12-31`, `Year 2050 clamped to ${maxYear}`);
+});
+
+test('Receipt parser empty and invalid input resilience', () => {
+  const emptyRes = ReceiptParser.parseReceiptText('');
+  assertEquals(emptyRes.amount, 0, 'Empty text returns amount 0');
+  assertEquals(emptyRes.confidence, 0, 'Empty text returns confidence 0');
+  assertEquals(emptyRes.rawLines.length, 0, 'Empty text returns empty rawLines');
+
+  const whitespaceRes = ReceiptParser.parseReceiptText('   \n\n   ');
+  assertEquals(whitespaceRes.amount, 0, 'Whitespace returns amount 0');
+});
+
+test('Receipt scanning PWA integration: index.html, CSS, sw.js, and app.js wiring', () => {
+  const getFileContent = (path) => {
+    if (typeof read === 'function') return read(path);
+    if (typeof require === 'function') return require('fs').readFileSync(path, 'utf8');
+    return '';
+  };
+
+  const html = getFileContent('index.html');
+  const css = getFileContent('css/components.css');
+  const sw = getFileContent('sw.js');
+  const app = getFileContent('js/app.js');
+
+  // 1. index.html checks
+  assert(html.includes('tesseract.min.js'), 'index.html includes Tesseract.js CDN script');
+  assert(html.includes('heic2any.min.js'), 'index.html includes heic2any CDN script');
+  assert(html.includes('id="receiptCameraInput"'), 'index.html includes hidden camera input');
+  assert(html.includes('id="receiptGalleryInput"'), 'index.html includes hidden gallery input');
+  assert(html.includes('accept="image/*,.heic,.heif"'), 'index.html inputs accept HEIC and HEIF formats');
+  assert(html.includes('id="btnQuickAddScan"'), 'index.html includes Scan Receipt button');
+  assert(html.includes('id="receiptSourceModal"'), 'index.html includes receipt source action sheet');
+  assert(html.includes('id="btnActionTakePhoto"'), 'index.html includes Take Photo action sheet option');
+  assert(html.includes('id="btnActionChooseGallery"'), 'index.html includes Choose Gallery action sheet option');
+  assert(html.includes('id="ocrScanningBanner"'), 'index.html includes OCR scanning banner');
+  assert(html.includes('id="ocrProgressBar"'), 'index.html includes OCR progress bar');
+  assert(html.includes('id="ocrStatusSubtitle"'), 'index.html includes OCR subtitle');
+  assert(html.includes('js/ocr-engine.js') && html.includes('js/receipt-parser.js'), 'index.html includes OCR and parser scripts');
+
+  // 2. css/components.css checks
+  assert(css.includes('.sheet-scan-btn'), 'components.css defines .sheet-scan-btn');
+  assert(css.includes('.ocr-scanning-banner'), 'components.css defines .ocr-scanning-banner');
+  assert(css.includes('.ocr-spinner'), 'components.css defines .ocr-spinner');
+  assert(css.includes('.ocr-progress-bar'), 'components.css defines .ocr-progress-bar');
+  assert(css.includes('@keyframes spin'), 'components.css defines spin animation');
+  assert(css.includes('.action-sheet-overlay'), 'components.css defines action sheet overlay');
+  assert(css.includes('.action-sheet-dialog'), 'components.css defines action sheet dialog');
+  assert(css.includes('.action-sheet-option-btn'), 'components.css defines action sheet option buttons');
+
+  // 3. sw.js checks
+  assert(sw.includes("CACHE_VERSION = 'v6'"), 'sw.js CACHE_VERSION bumped to v6');
+  assert(sw.includes("'./js/ocr-engine.js'"), 'sw.js precaches ocr-engine.js');
+  assert(sw.includes("'./js/receipt-parser.js'"), 'sw.js precaches receipt-parser.js');
+  assert(sw.includes('cdn.jsdelivr.net') && sw.includes('tessdata'), 'sw.js includes cache-first runtime caching for OCR assets');
+
+  // 4. app.js checks
+  assert(app.includes('btnQuickAddScan'), 'app.js references btnQuickAddScan');
+  assert(app.includes('receiptSourceModal'), 'app.js manages receiptSourceModal');
+  assert(app.includes('btnActionTakePhoto'), 'app.js binds Take Photo button');
+  assert(app.includes('btnActionChooseGallery'), 'app.js binds Choose Gallery button');
+  assert(app.includes('receiptCameraInput'), 'app.js references receiptCameraInput');
+  assert(app.includes('BudgetOCR.preprocessImage'), 'app.js calls BudgetOCR.preprocessImage');
+  assert(app.includes('BudgetOCR.recognizeReceipt'), 'app.js calls BudgetOCR.recognizeReceipt');
+  assert(app.includes('ReceiptParser.parseReceiptText'), 'app.js calls ReceiptParser.parseReceiptText');
+  assert(app.includes('numpad.setAmount'), 'app.js populates numpad with parsed amount');
+});
+
+test('BudgetOCR HEIC format detection and conversion support', () => {
+  assert(typeof BudgetOCR.isHeicImage === 'function', 'isHeicImage should be a function');
+
+  // Positive detection
+  assertEquals(BudgetOCR.isHeicImage({ type: 'image/heic' }), true, 'Detects image/heic MIME type');
+  assertEquals(BudgetOCR.isHeicImage({ type: 'image/heif' }), true, 'Detects image/heif MIME type');
+  assertEquals(BudgetOCR.isHeicImage({ name: 'IMG_4521.HEIC' }), true, 'Detects uppercase .HEIC extension');
+  assertEquals(BudgetOCR.isHeicImage({ name: 'receipt.heif' }), true, 'Detects lowercase .heif extension');
+
+  // Negative detection
+  assertEquals(BudgetOCR.isHeicImage({ type: 'image/jpeg', name: 'photo.jpg' }), false, 'Rejects standard JPEG');
+  assertEquals(BudgetOCR.isHeicImage({ type: 'image/png', name: 'screenshot.png' }), false, 'Rejects standard PNG');
+  assertEquals(BudgetOCR.isHeicImage(null), false, 'Handles null safely');
+  assertEquals(BudgetOCR.isHeicImage({}), false, 'Handles empty object safely');
 });
 
 log('\n-----------------------------------------');

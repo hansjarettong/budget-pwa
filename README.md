@@ -9,6 +9,7 @@ A fast, lightweight, and offline-first personal budget tracker designed with a c
 - **🔒 100% Local & Private:** All transactions, categories, and custom limits stay on your device via browser `localStorage`. No accounts, no database, no servers, and zero tracking.
 - **🛡️ Storage Durability (Automatic):** Leverages `navigator.storage.persist()` on launch to exempt budget data from automatic eviction during low disk space cleanups.
 - **⚡ Offline-First PWA:** Full service worker caching (`sw.js`). Works seamlessly without internet or in airplane mode.
+- **📷 On-Device Receipt Scanner & Offline OCR:** Snap receipt photos using the native mobile camera (`<input capture="environment">`). A local WebAssembly engine (Tesseract.js v5) with bilingual English and Japanese (`eng+jpn`) models runs in a background Web Worker, extracting totals (supporting ¥, $, €, £, ₱), dates, store names, and suggested categories directly into the Quick Add sheet for 1-tap confirmation. 100% private with zero cloud API uploads.
 - **📊 Visual Spending Limits:** Real-time color-coded progress bars for each category showing budget consumption and remaining allowance.
 - **⌨️ MoneyNote-Style Numpad:** Custom quick-add sheet with an integrated numpad for rapid, frictionless expense logging.
 - **📅 Month-by-Month History & Quick Jump:** Easily navigate past and upcoming months with 1-tap `‹` and `›` buttons or tap the month title to open the 12-month calendar picker with year navigation and transaction indicator dots.
@@ -27,16 +28,18 @@ A fast, lightweight, and offline-first personal budget tracker designed with a c
 budget-pwa/
 ├── index.html          # Semantic application shell and views (Dashboard, History, Limits, Settings)
 ├── manifest.json       # PWA manifest (app name, colors, icons, display: standalone)
-├── sw.js               # Service Worker caching assets for offline capability (v5)
+├── sw.js               # Service Worker caching assets for offline capability (v6)
 ├── css/
 │   ├── app.css         # Theme tokens, iOS layout, typography, navigation bars
-│   └── components.css  # Budget bars, MoneyNote numpad sheet, transaction lists, modals, storage cards
+│   └── components.css  # Budget bars, MoneyNote numpad sheet, OCR scanner banner, modals
 ├── js/
 │   ├── app.js          # App initialization, tab router, modal bindings, event listeners
 │   ├── calculations.js # Monthly aggregates, spending percentages, currency formatters
 │   ├── cloud.js        # Serverless Google Drive & Synced Cloud Folder sync engine
 │   ├── crypto.js       # Client-side Web Cryptography (AES-GCM 256 + PBKDF2) encryption
 │   ├── numpad.js       # Custom keypad input handler with decimal precision
+│   ├── ocr-engine.js   # Canvas image downscaling, contrast optimization & Tesseract WASM worker
+│   ├── receipt-parser.js # Bilingual (EN/JA) total, date, merchant & category heuristic parser
 │   ├── store.js        # Data persistence layer (localStorage, storage persistence, export/import)
 │   └── ui.js           # DOM rendering (dashboard cards, progress bars, history feed)
 ├── icons/              # App icons (192x192, 512x512, Apple touch icons, favicons)

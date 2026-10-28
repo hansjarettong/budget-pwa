@@ -20,6 +20,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon.png">
   <link rel="icon" type="image/x-icon" href="./icons/favicon.ico">
 
+  <!-- OCR & Image Conversion Engines (Tesseract.js v5 + heic2any) -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
   <!-- Stylesheets -->
   <link rel="stylesheet" href="./css/app.css">
   <link rel="stylesheet" href="./css/components.css">
@@ -262,13 +266,30 @@
       </button>
     </nav>
 
+    <!-- Hidden File Inputs for Receipt Scanning (Camera vs Gallery, with HEIC support) -->
+    <input type="file" id="receiptCameraInput" accept="image/*,.heic,.heif" capture="environment" style="display: none;">
+    <input type="file" id="receiptGalleryInput" accept="image/*,.heic,.heif" style="display: none;">
+
     <!-- Quick Add Bottom Sheet Modal (MoneyNote style) -->
     <div class="modal-overlay" id="quickAddModal">
       <div class="bottom-sheet">
         <div class="sheet-handle-bar"></div>
         <div class="sheet-header">
           <h3 class="sheet-title">Log Expense</h3>
+          <button type="button" class="sheet-scan-btn" id="btnQuickAddScan">📷 Scan Receipt</button>
           <button class="sheet-close-btn" id="btnQuickAddClose" aria-label="Close">✕</button>
+        </div>
+
+        <!-- Inline OCR Scanning Progress Banner -->
+        <div id="ocrScanningBanner" class="ocr-scanning-banner" style="display: none;">
+          <div class="ocr-spinner"></div>
+          <div class="ocr-text-col">
+            <div class="ocr-status-title" id="ocrStatusTitle">Scanning receipt...</div>
+            <div class="ocr-status-subtitle" id="ocrStatusSubtitle">Preparing camera photo...</div>
+            <div class="ocr-progress-track">
+              <div class="ocr-progress-bar" id="ocrProgressBar" style="width: 0%;"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Large Keypad Amount Display -->
@@ -390,6 +411,29 @@
       </div>
     </div>
 
+    <!-- Receipt Source iOS Action Sheet (Camera vs Photo Library) -->
+    <div class="modal-overlay action-sheet-overlay" id="receiptSourceModal">
+      <div class="action-sheet-dialog">
+        <div class="action-sheet-group">
+          <div class="action-sheet-header">
+            <span class="action-sheet-title">Scan Receipt</span>
+            <span class="action-sheet-subtitle">Choose photo source</span>
+          </div>
+          <button type="button" class="action-sheet-option-btn" id="btnActionTakePhoto">
+            <span class="action-sheet-icon">📸</span>
+            <span class="action-sheet-text">Take Photo (Camera)</span>
+          </button>
+          <button type="button" class="action-sheet-option-btn" id="btnActionChooseGallery">
+            <span class="action-sheet-icon">🖼️</span>
+            <span class="action-sheet-text">Choose from Photo Library</span>
+          </button>
+        </div>
+        <div class="action-sheet-group">
+          <button type="button" class="action-sheet-cancel-btn" id="btnActionCancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div class="toast-container" id="toastContainer"></div>
   </div>
@@ -400,6 +444,8 @@
   <script src="./js/cloud.js"></script>
   <script src="./js/calculations.js"></script>
   <script src="./js/numpad.js"></script>
+  <script src="./js/ocr-engine.js"></script>
+  <script src="./js/receipt-parser.js"></script>
   <script src="./js/ui.js"></script>
   <script src="./js/app.js"></script>
 </body>

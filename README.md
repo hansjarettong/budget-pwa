@@ -11,7 +11,8 @@ A fast, lightweight, and offline-first personal budget tracker designed with a c
 - **⚡ Offline-First PWA:** Full service worker caching (`sw.js`). Works seamlessly without internet or in airplane mode.
 - **📷 On-Device Receipt Scanner & Offline OCR:** Snap receipt photos using the native mobile camera (`<input capture="environment">`). A local WebAssembly engine (Tesseract.js v5) with bilingual English and Japanese (`eng+jpn`) models runs in a background Web Worker, extracting totals (supporting ¥, $, €, £, ₱), dates, store names, and suggested categories directly into the Quick Add sheet for 1-tap confirmation. 100% private with zero cloud API uploads.
 - **📊 Visual Spending Limits:** Real-time color-coded progress bars for each category showing budget consumption and remaining allowance.
-- **⌨️ MoneyNote-Style Numpad:** Custom quick-add sheet with an integrated numpad for rapid, frictionless expense logging.
+- **🏦 Savings Goals & Sinking Funds:** Track multi-month financial goals (e.g., travel trips, emergency funds, tech purchases) with visual progress bars, target deadlines, and auto-calculated monthly pace recommendations (e.g., *"Save ¥30,000/mo for 7 months"*). Keeps savings allocations cleanly separated from everyday consumable expenses while displaying your complete monthly cash outflow.
+- **⌨️ MoneyNote-Style Numpad:** Custom quick-add sheet with an integrated numpad for rapid, frictionless expense logging and 1-tap savings allocations.
 - **📅 Month-by-Month History & Quick Jump:** Easily navigate past and upcoming months with 1-tap `‹` and `›` buttons or tap the month title to open the 12-month calendar picker with year navigation and transaction indicator dots.
 - **🌍 Multi-Currency Support (Default: JPY ¥):** Pre-configured with Japanese Yen (¥) and zero-decimal formatting, with support for USD ($), EUR (€), GBP (£), PHP (₱), and other international currencies.
 - **☁️ Bring Your Own Cloud & Encryption:**

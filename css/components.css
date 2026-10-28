@@ -231,6 +231,55 @@
   color: var(--accent-red);
 }
 
+/* Summary Outflow Divider and Breakdown */
+.summary-outflow-divider {
+  height: 1px;
+  background-color: var(--separator);
+  margin: 14px 0 12px 0;
+}
+
+.summary-outflow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.outflow-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.outflow-divider-vertical {
+  width: 1px;
+  height: 28px;
+  background-color: var(--separator);
+}
+
+.outflow-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.outflow-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.outflow-value.savings {
+  color: var(--accent-green);
+}
+
+.outflow-value.total {
+  color: var(--text-primary);
+}
+
 /* ==========================================================================
    3. Category Budget Progress Cards (Focal Feature)
    ========================================================================== */
@@ -505,6 +554,41 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Segmented Type Control: Expense vs Savings */
+.sheet-type-segmented-control {
+  display: flex;
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  margin-bottom: 14px;
+  gap: 4px;
+  border: 1px solid var(--separator);
+}
+
+.type-segment-btn {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 8px 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.type-segment-btn.active {
+  background-color: var(--card-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Amount Input Screen */
@@ -1371,5 +1455,366 @@
 .action-sheet-cancel-btn:active {
   background-color: var(--bg-tertiary);
 }
+
+/* ==========================================================================
+   Savings View & Goals Cards
+   ========================================================================== */
+.savings-hero-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-md);
+  border: 0.5px solid var(--card-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.savings-hero-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #10b981, #06b6d4, #007AFF);
+}
+
+.savings-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.savings-hero-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.savings-hero-amount {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.savings-hero-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--accent-green-subtle);
+  color: var(--accent-green);
+}
+
+.savings-hero-bottom {
+  border-top: 1px solid var(--separator);
+  padding-top: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.savings-hero-stat {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.savings-hero-stat-label {
+  color: var(--text-secondary);
+}
+
+.savings-hero-stat-value.positive {
+  color: var(--accent-green);
+  font-weight: 700;
+}
+
+/* Savings Goal Card */
+.savings-goals-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.savings-goal-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 0.5px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.goal-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.goal-info-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.goal-icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.goal-name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.goal-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.goal-fraction-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.goal-saved-bold {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.goal-badge-percent {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.goal-progress-track {
+  width: 100%;
+  height: 8px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.goal-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.goal-card-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.goal-remaining-text {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.goal-month-deposit-tag {
+  color: var(--accent-green);
+  font-weight: 700;
+  background-color: var(--accent-green-subtle);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.goal-pace-badge {
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-left: 3px solid var(--accent-blue);
+}
+
+.goal-pace-badge.completed {
+  color: var(--accent-green);
+  border-left-color: var(--accent-green);
+  font-weight: 600;
+}
+
+.goal-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.goal-action-btn {
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+
+.goal-action-btn:active {
+  transform: scale(0.96);
+}
+
+.goal-action-btn.deposit {
+  background-color: var(--accent-blue);
+  color: #FFFFFF;
+  flex: 1;
+}
+
+.goal-action-btn.withdraw {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--separator);
+  padding: 7px 12px;
+}
+
+.goal-action-btn.icon-btn {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--separator);
+  color: var(--text-secondary);
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: var(--radius-full);
+}
+
+.goal-action-btn.icon-btn.delete:hover {
+  color: var(--accent-red);
+}
+
+/* Dashboard Compact Savings Snapshot */
+.dashboard-savings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-savings-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+  border: 0.5px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dash-goal-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dash-goal-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.dash-goal-title-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-goal-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dash-goal-fraction {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dash-goal-deposit-btn {
+  background: var(--accent-blue-subtle);
+  color: var(--accent-blue);
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.dash-goal-deposit-btn:active {
+  transform: scale(0.95);
+}
+
+.dash-goal-progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.dash-goal-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+
+/* History Savings Badge */
+.savings-type-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.savings-type-pill.savings-deposit {
+  background-color: var(--accent-green-subtle);
+  color: var(--accent-green);
+}
+
+.savings-type-pill.savings-withdraw {
+  background-color: var(--accent-orange-subtle);
+  color: var(--accent-orange);
+}
+
+.transaction-amount.savings-deposit {
+  color: var(--accent-green);
+}
+
+.transaction-amount.savings-withdraw {
+  color: var(--accent-orange);
+}
+
 
 

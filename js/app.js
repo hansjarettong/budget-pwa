@@ -13,6 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedCategoryId = null;
   let editingCategoryId = null;
 
+  // Savings State
+  let quickAddMode = 'expense'; // 'expense' | 'savings'
+  let selectedGoalId = null;
+  let editingGoalId = null;
+  let withdrawingGoalId = null;
+
   // 2. Initialize Numpad Controller
   const amountDisplayEl = document.getElementById('numpadAmountDisplay');
   const numpad = new window.BudgetNumpad.NumpadController({
@@ -30,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('PWA ServiceWorker registered with scope:', reg.scope);
         // Proactively check for Service Worker updates on launch
         if (typeof reg.update === 'function') {
-          reg.update().catch(() => {});
+          reg.update().catch(() => { });
         }
       })
       .catch(err => console.log('ServiceWorker registration skipped/failed:', err));
@@ -45,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupMonthPickerModal();
     setupQuickAddModal();
     setupCategoryEditModal();
+    setupSavingsGoalModal();
+    setupSavingsWithdrawModal();
     setupPassphraseModal();
     setupSettingsActions();
     initStoragePersistence();
@@ -60,17 +68,57 @@ document.addEventListener('DOMContentLoaded', () => {
       window.BudgetUI.renderMonthSelector(currentMonthKey, 'monthSelectorContainer');
       window.BudgetUI.renderSummaryCard(currentMonthKey, 'summaryCardContainer');
       window.BudgetUI.renderCategoryCards(currentMonthKey, 'categoryCardsContainer', (catId) => {
-        openQuickAddModal(catId);
+        openQuickAddModal(catId, null, 'expense');
       });
+      window.BudgetUI.renderDashboardSavingsSnapshot(
+        currentMonthKey,
+        'dashboardSavingsContainer',
+        (goalId) => {
+          openQuickAddModal(null, goalId, 'savings');
+        },
+        () => {
+          switchTab('savings');
+        }
+      );
+    } else if (activeTab === 'savings') {
+      window.BudgetUI.renderMonthSelector(currentMonthKey, 'savingsMonthSelectorContainer');
+      window.BudgetUI.renderSavingsOverviewCard(currentMonthKey, 'savingsOverviewCardContainer');
+      window.BudgetUI.renderSavingsGoals(
+        currentMonthKey,
+        'savingsGoalsContainer',
+        (goalId) => {
+          openQuickAddModal(null, goalId, 'savings');
+        },
+        (goalId) => {
+          openSavingsWithdrawModal(goalId);
+        },
+        (goalId) => {
+          openSavingsGoalModal(goalId);
+        },
+        (goalId) => {
+          handleDeleteSavingsGoal(goalId);
+        }
+      );
     } else if (activeTab === 'history') {
       window.BudgetUI.renderMonthSelector(currentMonthKey, 'historyMonthSelectorContainer');
-      window.BudgetUI.renderHistory(currentMonthKey, 'historyContainer', (txId) => {
-        if (confirm('Delete this transaction?')) {
-          window.BudgetStore.deleteTransaction(txId);
-          window.BudgetUI.showToast('Transaction deleted');
-          renderCurrentView();
+      window.BudgetUI.renderHistory(
+        currentMonthKey,
+        'historyContainer',
+        (txId) => {
+          if (confirm('Delete this transaction?')) {
+            window.BudgetStore.deleteTransaction(txId);
+            window.BudgetUI.showToast('Transaction deleted');
+            renderCurrentView();
+          }
+        },
+        (srecId) => {
+          if (confirm('Delete this savings record?')) {
+            window.BudgetStore.deleteSavingsRecord(srecId);
+            window.BudgetUI.showToast('Savings record deleted');
+            renderCurrentView();
+          }
         }
-      });
+      );
     } else if (activeTab === 'categories') {
       window.BudgetUI.renderCategoriesManager('categoriesManagerContainer', (catId) => {
         openCategoryEditModal(catId);
@@ -78,6 +126,29 @@ document.addEventListener('DOMContentLoaded', () => {
         handleDeleteCategory(catId);
       });
     }
+  }
+
+  function switchTab(targetTab) {
+    const tabButtons = document.querySelectorAll('.tab-item');
+    tabButtons.forEach(btn => {
+      if (btn.getAttribute('data-tab') === targetTab) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    document.querySelectorAll('.view-section').forEach(view => {
+      view.classList.remove('active');
+    });
+
+    const activeSection = document.getElementById(`view-${targetTab}`);
+    if (activeSection) {
+      activeSection.classList.add('active');
+    }
+
+    activeTab = targetTab;
+    renderCurrentView();
   }
 
   function handleDeleteCategory(catId) {
@@ -89,6 +160,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirm(`Are you sure you want to delete the category "${cat.name}"?${note}`)) {
       window.BudgetStore.deleteCategory(catId);
       window.BudgetUI.showToast(`Deleted ${cat.name}`);
+      renderCurrentView();
+    }
+  }
+
+  function handleDeleteSavingsGoal(goalId) {
+    const goal = window.BudgetStore.getSavingsGoalById(goalId);
+    if (!goal) return;
+
+    const records = window.BudgetStore.getSavingsRecords({ goalId });
+    const note = records.length > 0 ? ` It will also remove ${records.length} associated deposit/withdrawal record(s).` : '';
+    if (confirm(`Are you sure you want to delete the savings goal "${goal.name}"?${note}`)) {
+      window.BudgetStore.deleteSavingsGoal(goalId);
+      window.BudgetUI.showToast(`Deleted ${goal.name}`);
       renderCurrentView();
     }
   }
@@ -391,7 +475,18 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // Save transaction
+    // Mode Toggle: Expense vs Savings
+    const btnTypeExpense = document.getElementById('btnTypeExpense');
+    const btnTypeSavings = document.getElementById('btnTypeSavings');
+
+    if (btnTypeExpense) {
+      btnTypeExpense.addEventListener('click', () => setQuickAddMode('expense'));
+    }
+    if (btnTypeSavings) {
+      btnTypeSavings.addEventListener('click', () => setQuickAddMode('savings'));
+    }
+
+    // Save transaction or savings contribution
     if (saveBtn) {
       saveBtn.addEventListener('click', () => {
         const amount = numpad.getNumericValue();
@@ -400,13 +495,37 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
+        const dateVal = dateInput.value || new Date().toISOString().split('T')[0];
+        const noteVal = (noteInput.value || '').trim();
+
+        if (quickAddMode === 'savings') {
+          if (!selectedGoalId) {
+            window.BudgetUI.showToast('Please select a savings goal');
+            return;
+          }
+
+          window.BudgetStore.addSavingsRecord({
+            goalId: selectedGoalId,
+            amount: amount,
+            type: 'deposit',
+            date: dateVal,
+            note: noteVal
+          });
+
+          const goal = window.BudgetStore.getSavingsGoalById(selectedGoalId);
+          const goalName = goal ? goal.name : 'Savings Goal';
+          window.BudgetUI.showToast(`Saved ${window.BudgetCalculations.formatCurrency(amount)} to ${goalName}!`);
+
+          closeQuickAddModal();
+          renderCurrentView();
+          return;
+        }
+
+        // Default Expense Mode
         if (!selectedCategoryId) {
           window.BudgetUI.showToast('Please select a category');
           return;
         }
-
-        const dateVal = dateInput.value || new Date().toISOString().split('T')[0];
-        const noteVal = (noteInput.value || '').trim();
 
         window.BudgetStore.addTransaction({
           amount: amount,
@@ -425,7 +544,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function openQuickAddModal(preselectedCategoryId = null) {
+  function setQuickAddMode(mode) {
+    quickAddMode = mode === 'savings' ? 'savings' : 'expense';
+    const btnTypeExpense = document.getElementById('btnTypeExpense');
+    const btnTypeSavings = document.getElementById('btnTypeSavings');
+    const sheetTitle = document.getElementById('quickAddSheetTitle');
+    const amountLabel = document.getElementById('quickAddAmountLabel');
+    const chipsHeader = document.getElementById('quickAddChipsHeaderTitle');
+    const scanBtn = document.getElementById('btnQuickAddScan');
+    const saveBtn = document.getElementById('btnSaveExpense');
+
+    if (btnTypeExpense) {
+      if (quickAddMode === 'expense') btnTypeExpense.classList.add('active');
+      else btnTypeExpense.classList.remove('active');
+    }
+    if (btnTypeSavings) {
+      if (quickAddMode === 'savings') btnTypeSavings.classList.add('active');
+      else btnTypeSavings.classList.remove('active');
+    }
+
+    if (quickAddMode === 'savings') {
+      if (sheetTitle) sheetTitle.textContent = 'Set Aside Savings';
+      if (amountLabel) amountLabel.textContent = 'Amount to Save';
+      if (chipsHeader) chipsHeader.textContent = 'Select Goal';
+      if (scanBtn) scanBtn.style.display = 'none';
+      if (saveBtn) saveBtn.textContent = 'Save to Goal';
+
+      const goals = window.BudgetStore.getSavingsGoals();
+      if (!selectedGoalId && goals.length > 0) {
+        selectedGoalId = goals[0].id;
+      }
+      window.BudgetUI.renderSavingsGoalChips(selectedGoalId, 'quickAddChipsContainer', (goalId) => {
+        selectedGoalId = goalId;
+      });
+    } else {
+      if (sheetTitle) sheetTitle.textContent = 'Log Expense';
+      if (amountLabel) amountLabel.textContent = 'Amount Spent';
+      if (chipsHeader) chipsHeader.textContent = 'Select Category';
+      if (scanBtn) scanBtn.style.display = 'inline-flex';
+      if (saveBtn) saveBtn.textContent = 'Save Expense';
+
+      const categories = window.BudgetStore.getCategories();
+      if (!selectedCategoryId && categories.length > 0) {
+        selectedCategoryId = categories[0].id;
+      }
+      window.BudgetUI.renderQuickAddChips(selectedCategoryId, 'quickAddChipsContainer', (catId) => {
+        selectedCategoryId = catId;
+      });
+    }
+  }
+
+  function openQuickAddModal(preselectedCategoryId = null, preselectedGoalId = null, mode = 'expense') {
     const overlay = document.getElementById('quickAddModal');
     const dateInput = document.getElementById('expenseDateInput');
     const noteInput = document.getElementById('expenseNoteInput');
@@ -435,19 +604,18 @@ document.addEventListener('DOMContentLoaded', () => {
     numpad.reset();
     if (noteInput) noteInput.value = '';
     if (dateInput) {
-      // Default to today in YYYY-MM-DD
       const now = new Date();
       dateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     }
 
-    const categories = window.BudgetStore.getCategories();
-    if (categories.length > 0) {
-      selectedCategoryId = preselectedCategoryId || categories[0].id;
+    if (preselectedCategoryId) {
+      selectedCategoryId = preselectedCategoryId;
+    }
+    if (preselectedGoalId) {
+      selectedGoalId = preselectedGoalId;
     }
 
-    window.BudgetUI.renderQuickAddChips(selectedCategoryId, 'quickAddChipsContainer', (catId) => {
-      selectedCategoryId = catId;
-    });
+    setQuickAddMode(mode);
 
     if (overlay) {
       overlay.classList.add('open');
@@ -581,6 +749,202 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closeCategoryEditModal() {
     const overlay = document.getElementById('categoryEditModal');
+    if (overlay) overlay.classList.remove('open');
+  }
+
+  // ==========================================================================
+  // Savings Goals Management & Withdrawals
+  // ==========================================================================
+  function setupSavingsGoalModal() {
+    const overlay = document.getElementById('savingsGoalModal');
+    const closeBtn = document.getElementById('btnSavingsGoalClose');
+    const saveBtn = document.getElementById('btnSaveSavingsGoal');
+    const deleteBtn = document.getElementById('btnDeleteSavingsGoal');
+
+    if (closeBtn) closeBtn.addEventListener('click', closeSavingsGoalModal);
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeSavingsGoalModal();
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#btnOpenAddSavingsGoalModal')) {
+        openSavingsGoalModal(null);
+      }
+    });
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => {
+        if (!editingGoalId) return;
+        handleDeleteSavingsGoal(editingGoalId);
+        closeSavingsGoalModal();
+      });
+    }
+
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        const nameInput = document.getElementById('goalInputName');
+        const iconInput = document.getElementById('goalInputIcon');
+        const targetInput = document.getElementById('goalInputTarget');
+        const dateInput = document.getElementById('goalInputTargetDate');
+        const colorInput = document.getElementById('goalInputColor');
+
+        const name = (nameInput.value || '').trim();
+        const icon = (iconInput.value || '🎯').trim();
+        const targetAmount = parseFloat(targetInput.value) || 0;
+        const targetDate = dateInput.value || null;
+        const color = colorInput.value || '#007AFF';
+
+        if (!name) {
+          window.BudgetUI.showToast('Please enter a goal name');
+          return;
+        }
+
+        if (targetAmount <= 0) {
+          window.BudgetUI.showToast('Target amount must be greater than 0');
+          return;
+        }
+
+        window.BudgetStore.saveSavingsGoal({
+          id: editingGoalId || undefined,
+          name: name,
+          icon: icon,
+          targetAmount: targetAmount,
+          targetDate: targetDate,
+          color: color
+        });
+
+        window.BudgetUI.showToast(`Saved goal "${name}"!`);
+        closeSavingsGoalModal();
+        renderCurrentView();
+      });
+    }
+  }
+
+  function openSavingsGoalModal(goalId = null) {
+    editingGoalId = goalId;
+    const overlay = document.getElementById('savingsGoalModal');
+    const titleEl = document.getElementById('savingsGoalModalTitle');
+    const nameInput = document.getElementById('goalInputName');
+    const iconInput = document.getElementById('goalInputIcon');
+    const targetInput = document.getElementById('goalInputTarget');
+    const dateInput = document.getElementById('goalInputTargetDate');
+    const colorInput = document.getElementById('goalInputColor');
+    const deleteBtn = document.getElementById('btnDeleteSavingsGoal');
+    const targetLabel = document.getElementById('goalInputTargetLabel');
+
+    const symbol = window.BudgetCalculations.getCurrencySymbol();
+    if (targetLabel) {
+      targetLabel.textContent = `Target Amount (${symbol})`;
+    }
+
+    if (deleteBtn) {
+      deleteBtn.style.display = goalId ? 'block' : 'none';
+    }
+
+    if (goalId) {
+      const goal = window.BudgetStore.getSavingsGoalById(goalId);
+      if (goal) {
+        titleEl.textContent = 'Edit Savings Goal';
+        nameInput.value = goal.name;
+        iconInput.value = goal.icon || '🎯';
+        targetInput.value = goal.targetAmount;
+        dateInput.value = goal.targetDate || '';
+        colorInput.value = goal.color || '#007AFF';
+      }
+    } else {
+      titleEl.textContent = 'Create Savings Goal';
+      nameInput.value = '';
+      iconInput.value = '🎯';
+      targetInput.value = '';
+      dateInput.value = '';
+      colorInput.value = '#007AFF';
+    }
+
+    if (overlay) overlay.classList.add('open');
+  }
+
+  function closeSavingsGoalModal() {
+    const overlay = document.getElementById('savingsGoalModal');
+    if (overlay) overlay.classList.remove('open');
+  }
+
+  function setupSavingsWithdrawModal() {
+    const overlay = document.getElementById('savingsWithdrawModal');
+    const closeBtn = document.getElementById('btnSavingsWithdrawClose');
+    const submitBtn = document.getElementById('btnSubmitWithdrawal');
+    const amountInput = document.getElementById('inputWithdrawAmount');
+    const dateInput = document.getElementById('inputWithdrawDate');
+    const noteInput = document.getElementById('inputWithdrawNote');
+
+    if (closeBtn) closeBtn.addEventListener('click', closeSavingsWithdrawModal);
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeSavingsWithdrawModal();
+      });
+    }
+
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => {
+        if (!withdrawingGoalId) return;
+
+        const amount = parseFloat(amountInput.value) || 0;
+        if (amount <= 0) {
+          window.BudgetUI.showToast('Please enter a valid withdrawal amount');
+          return;
+        }
+
+        const dateVal = dateInput.value || new Date().toISOString().split('T')[0];
+        const noteVal = (noteInput.value || '').trim();
+
+        window.BudgetStore.addSavingsRecord({
+          goalId: withdrawingGoalId,
+          amount: amount,
+          type: 'withdraw',
+          date: dateVal,
+          note: noteVal
+        });
+
+        const goal = window.BudgetStore.getSavingsGoalById(withdrawingGoalId);
+        const goalName = goal ? goal.name : 'Savings Goal';
+        window.BudgetUI.showToast(`Recorded withdrawal of ${window.BudgetCalculations.formatCurrency(amount)} from ${goalName}`);
+
+        closeSavingsWithdrawModal();
+        renderCurrentView();
+      });
+    }
+  }
+
+  function openSavingsWithdrawModal(goalId) {
+    withdrawingGoalId = goalId;
+    const overlay = document.getElementById('savingsWithdrawModal');
+    const titleEl = document.getElementById('savingsWithdrawModalTitle');
+    const subtitleEl = document.getElementById('savingsWithdrawSubtitle');
+    const amountInput = document.getElementById('inputWithdrawAmount');
+    const dateInput = document.getElementById('inputWithdrawDate');
+    const noteInput = document.getElementById('inputWithdrawNote');
+    const labelEl = document.getElementById('savingsWithdrawAmountLabel');
+
+    const goal = window.BudgetStore.getSavingsGoalById(goalId);
+    const goalName = goal ? goal.name : 'Goal';
+    const symbol = window.BudgetCalculations.getCurrencySymbol();
+
+    if (titleEl) titleEl.textContent = `Withdraw from ${goalName}`;
+    if (subtitleEl) subtitleEl.textContent = `Record a payout or withdrawal from "${goalName}" (e.g. paying for trip costs or reallocating cash).`;
+    if (labelEl) labelEl.textContent = `Withdrawal Amount (${symbol})`;
+    if (amountInput) amountInput.value = '';
+    if (noteInput) noteInput.value = '';
+    if (dateInput) {
+      const now = new Date();
+      dateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    if (overlay) overlay.classList.add('open');
+  }
+
+  function closeSavingsWithdrawModal() {
+    const overlay = document.getElementById('savingsWithdrawModal');
     if (overlay) overlay.classList.remove('open');
   }
 
@@ -1063,6 +1427,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const editLimitLabel = document.getElementById('editCategoryLimitLabel');
     if (editLimitLabel) {
       editLimitLabel.textContent = `Monthly Limit (${symbol})`;
+    }
+    const goalTargetLabel = document.getElementById('goalInputTargetLabel');
+    if (goalTargetLabel) {
+      goalTargetLabel.textContent = `Target Amount (${symbol})`;
+    }
+    const withdrawAmountLabel = document.getElementById('savingsWithdrawAmountLabel');
+    if (withdrawAmountLabel) {
+      withdrawAmountLabel.textContent = `Withdrawal Amount (${symbol})`;
     }
     const selectCurrency = document.getElementById('selectCurrency');
     if (selectCurrency) {

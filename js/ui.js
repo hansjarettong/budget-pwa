@@ -110,19 +110,34 @@
 
     const categories = Store().getCategories();
     const transactions = Store().getTransactions();
-    const overall = Calc().getOverallMonthlyStatus(categories, transactions, monthKey);
+    const savingsRecords = Store().getSavingsRecords ? Store().getSavingsRecords() : [];
+    const breakdown = Calc().getOverallMonthlyBreakdown
+      ? Calc().getOverallMonthlyBreakdown(categories, transactions, savingsRecords, monthKey)
+      : {
+          totalBudget: 0,
+          totalSpent: 0,
+          totalRemaining: 0,
+          overallPercent: 0,
+          status: 'safe',
+          savingsDeposited: 0,
+          savingsWithdrawn: 0,
+          netSaved: 0,
+          totalOutflow: 0
+        };
 
-    const spentFormatted = Calc().formatCurrency(overall.totalSpent);
-    const limitFormatted = Calc().formatCurrency(overall.totalBudget);
-    const remainingFormatted = Calc().formatCurrency(Math.abs(overall.totalRemaining));
+    const spentFormatted = Calc().formatCurrency(breakdown.totalSpent);
+    const limitFormatted = Calc().formatCurrency(breakdown.totalBudget);
+    const remainingFormatted = Calc().formatCurrency(Math.abs(breakdown.totalRemaining));
+    const savingsDepositedFormatted = Calc().formatCurrency(breakdown.savingsDeposited);
+    const totalOutflowFormatted = Calc().formatCurrency(breakdown.totalOutflow);
 
-    const statusClass = overall.status; // 'safe' | 'warning' | 'danger'
-    const fillPercent = Math.min(overall.overallPercent, 100);
+    const statusClass = breakdown.status; // 'safe' | 'warning' | 'danger'
+    const fillPercent = Math.min(breakdown.overallPercent, 100);
 
-    let statusLabel = `${overall.overallPercent}% consumed`;
-    if (overall.totalBudget === 0 && overall.totalSpent > 0) {
+    let statusLabel = `${breakdown.overallPercent}% consumed`;
+    if (breakdown.totalBudget === 0 && breakdown.totalSpent > 0) {
       statusLabel = 'No budget set';
-    } else if (overall.totalRemaining < 0) {
+    } else if (breakdown.totalRemaining < 0) {
       statusLabel = 'Over Budget!';
     }
 
@@ -130,9 +145,9 @@
       <div class="summary-card status-${statusClass}">
         <div class="summary-header">
           <div>
-            <div class="summary-label">Total Monthly Spending</div>
+            <div class="summary-label">Living Expenses</div>
             <div class="summary-spent-amount">${spentFormatted}</div>
-            <div class="summary-limit-subtext">Budget Limit: ${limitFormatted}</div>
+            <div class="summary-limit-subtext">Monthly Limit: ${limitFormatted}</div>
           </div>
           <div class="summary-status-pill ${statusClass}">${statusLabel}</div>
         </div>
@@ -144,13 +159,27 @@
         <div class="summary-footer-stats">
           <div>
             <span class="stat-item-label">Remaining: </span>
-            <span class="stat-item-value ${overall.totalRemaining >= 0 ? 'positive' : 'negative'}">
-              ${overall.totalRemaining >= 0 ? remainingFormatted : `-${remainingFormatted} Over`}
+            <span class="stat-item-value ${breakdown.totalRemaining >= 0 ? 'positive' : 'negative'}">
+              ${breakdown.totalRemaining >= 0 ? remainingFormatted : `-${remainingFormatted} Over`}
             </span>
           </div>
           <div>
             <span class="stat-item-label">Categories: </span>
             <span class="stat-item-value">${categories.length} tracked</span>
+          </div>
+        </div>
+
+        <!-- Monthly Financial Outflow Breakdown -->
+        <div class="summary-outflow-divider"></div>
+        <div class="summary-outflow-row">
+          <div class="outflow-col">
+            <span class="outflow-label">🏦 Saved This Month</span>
+            <span class="outflow-value savings">${savingsDepositedFormatted}</span>
+          </div>
+          <div class="outflow-divider-vertical"></div>
+          <div class="outflow-col">
+            <span class="outflow-label">💳 Total Cash Outflow</span>
+            <span class="outflow-value total">${totalOutflowFormatted}</span>
           </div>
         </div>
       </div>
@@ -273,9 +302,269 @@
   }
 
   /**
-   * Renders the History View (Transactions grouped by date)
+   * Renders Savings Goal Selection Chips in the Quick-Add modal (Savings mode)
    */
-  function renderHistory(monthKey, containerId = 'historyContainer', onDelete = null) {
+  function renderSavingsGoalChips(selectedGoalId, containerId = 'quickAddChipsContainer', onSelect = null) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const goals = Store().getSavingsGoals ? Store().getSavingsGoals() : [];
+
+    if (!goals.length) {
+      container.innerHTML = `<span style="font-size: 13px; color: var(--text-secondary); padding: 6px 0;">No savings goals yet. Create one in the Savings tab first!</span>`;
+      return;
+    }
+
+    container.innerHTML = goals.map(goal => {
+      const isSelected = goal.id === selectedGoalId;
+      return `
+        <button type="button" class="chip-btn ${isSelected ? 'selected' : ''}" data-goal-id="${goal.id}">
+          <span class="chip-icon">${goal.icon || '🎯'}</span>
+          <span>${escapeHtml(goal.name)}</span>
+        </button>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.chip-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const goalId = btn.getAttribute('data-goal-id');
+        container.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        if (typeof onSelect === 'function') onSelect(goalId);
+      });
+    });
+  }
+
+  /**
+   * Renders the Savings Overview Hero Card
+   */
+  function renderSavingsOverviewCard(monthKey, containerId = 'savingsOverviewCardContainer') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const goals = Store().getSavingsGoals ? Store().getSavingsGoals() : [];
+    const records = Store().getSavingsRecords ? Store().getSavingsRecords() : [];
+    const monthSummary = Calc().getMonthlySavingsSummary ? Calc().getMonthlySavingsSummary(records, monthKey) : { totalDeposited: 0, totalWithdrawn: 0, netSaved: 0 };
+
+    let totalAccumulated = 0;
+    for (const g of goals) {
+      const progress = Calc().getGoalProgress(g, records);
+      totalAccumulated += progress.totalSaved;
+    }
+
+    const totalAccumulatedStr = Calc().formatCurrency(totalAccumulated);
+    const monthDepositedStr = Calc().formatCurrency(monthSummary.totalDeposited);
+
+    container.innerHTML = `
+      <div class="savings-hero-card">
+        <div class="savings-hero-top">
+          <div>
+            <div class="savings-hero-label">Total Accumulated Savings</div>
+            <div class="savings-hero-amount">${totalAccumulatedStr}</div>
+          </div>
+          <div class="savings-hero-badge">${goals.length} Active ${goals.length === 1 ? 'Goal' : 'Goals'}</div>
+        </div>
+        <div class="savings-hero-bottom">
+          <div class="savings-hero-stat">
+            <span class="savings-hero-stat-label">This Month Deposited:</span>
+            <span class="savings-hero-stat-value positive">+${monthDepositedStr}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders Savings Goal Cards with live progress and action buttons
+   */
+  function renderSavingsGoals(monthKey, containerId = 'savingsGoalsContainer', onDeposit = null, onWithdraw = null, onEdit = null, onDelete = null) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const goals = Store().getSavingsGoals ? Store().getSavingsGoals() : [];
+    const records = Store().getSavingsRecords ? Store().getSavingsRecords() : [];
+
+    if (!goals.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🏦</div>
+          <div class="empty-state-title">No Savings Goals Yet</div>
+          <div class="empty-state-desc">Create your first goal to set aside money for trips, emergency funds, or tech purchases.</div>
+        </div>
+      `;
+      return;
+    }
+
+    const cardsHtml = goals.map(goal => {
+      const progress = Calc().getGoalProgress(goal, records);
+      const savedStr = Calc().formatCurrency(progress.totalSaved);
+      const targetStr = Calc().formatCurrency(progress.targetAmount);
+      const remainingStr = Calc().formatCurrency(progress.remainingAmount);
+      const fillWidth = Math.min(progress.percent, 100);
+
+      // Month specific contribution
+      const monthGoalRecords = records.filter(r => r.goalId === goal.id && r.date && r.date.startsWith(monthKey));
+      const monthDeposited = monthGoalRecords
+        .filter(r => r.type !== 'withdraw')
+        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      const monthDepositedStr = Calc().formatCurrency(monthDeposited);
+
+      let paceHtml = '';
+      if (progress.targetDate) {
+        const formattedTargetDate = goal.targetDate;
+        if (progress.isCompleted) {
+          paceHtml = `<div class="goal-pace-badge completed">🎉 Target Reached!</div>`;
+        } else if (progress.recommendedMonthly !== null) {
+          const recStr = Calc().formatCurrency(progress.recommendedMonthly);
+          const mosText = progress.remainingMonths > 0 ? `${progress.remainingMonths} mos left` : 'Due this month';
+          paceHtml = `<div class="goal-pace-badge">🎯 Target: ${escapeHtml(formattedTargetDate)} • Save <strong>${recStr}/mo</strong> (${mosText})</div>`;
+        }
+      } else if (progress.isCompleted) {
+        paceHtml = `<div class="goal-pace-badge completed">🎉 Target Reached!</div>`;
+      }
+
+      return `
+        <div class="savings-goal-card" data-goal-id="${goal.id}">
+          <div class="goal-card-top">
+            <div class="goal-info-left">
+              <div class="goal-icon-badge" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">
+                ${goal.icon || '🎯'}
+              </div>
+              <div class="goal-name-wrap">
+                <span class="goal-card-name">${escapeHtml(goal.name)}</span>
+                <span class="goal-fraction-text">
+                  <span class="goal-saved-bold">${savedStr}</span> / ${targetStr}
+                </span>
+              </div>
+            </div>
+            <div class="goal-badge-percent" style="background-color: ${goal.color || '#007AFF'}18; color: ${goal.color || '#007AFF'};">
+              ${progress.percent}%
+            </div>
+          </div>
+
+          <div class="goal-progress-track">
+            <div class="goal-progress-fill" style="width: ${fillWidth}%; background-color: ${goal.color || '#007AFF'};"></div>
+          </div>
+
+          <div class="goal-card-stats-row">
+            <span class="goal-remaining-text">${progress.isCompleted ? 'Goal fully funded!' : `${remainingStr} remaining`}</span>
+            ${monthDeposited > 0 ? `<span class="goal-month-deposit-tag">+${monthDepositedStr} this mo</span>` : ''}
+          </div>
+
+          ${paceHtml}
+
+          <div class="goal-card-actions">
+            <button type="button" class="goal-action-btn deposit" data-deposit-goal="${goal.id}">+ Deposit</button>
+            <button type="button" class="goal-action-btn withdraw" data-withdraw-goal="${goal.id}">- Withdraw</button>
+            <button type="button" class="goal-action-btn icon-btn" data-edit-goal="${goal.id}" title="Edit Goal">✎</button>
+            <button type="button" class="goal-action-btn icon-btn delete" data-delete-goal="${goal.id}" title="Delete Goal">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = `<div class="savings-goals-grid">${cardsHtml}</div>`;
+
+    if (typeof onDeposit === 'function') {
+      container.querySelectorAll('[data-deposit-goal]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onDeposit(btn.getAttribute('data-deposit-goal'));
+        });
+      });
+    }
+
+    if (typeof onWithdraw === 'function') {
+      container.querySelectorAll('[data-withdraw-goal]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onWithdraw(btn.getAttribute('data-withdraw-goal'));
+        });
+      });
+    }
+
+    if (typeof onEdit === 'function') {
+      container.querySelectorAll('[data-edit-goal]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onEdit(btn.getAttribute('data-edit-goal'));
+        });
+      });
+    }
+
+    if (typeof onDelete === 'function') {
+      container.querySelectorAll('[data-delete-goal]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onDelete(btn.getAttribute('data-delete-goal'));
+        });
+      });
+    }
+  }
+
+  /**
+   * Renders the Savings Goals snapshot on the Dashboard
+   */
+  function renderDashboardSavingsSnapshot(monthKey, containerId = 'dashboardSavingsContainer', onDeposit = null, onViewAll = null) {
+    const container = document.getElementById(containerId);
+    const headerEl = document.getElementById('dashboardSavingsHeader');
+    if (!container) return;
+
+    const goals = Store().getSavingsGoals ? Store().getSavingsGoals() : [];
+    const records = Store().getSavingsRecords ? Store().getSavingsRecords() : [];
+
+    if (!goals.length) {
+      if (headerEl) headerEl.style.display = 'none';
+      container.innerHTML = '';
+      return;
+    }
+
+    if (headerEl) headerEl.style.display = 'flex';
+
+    const itemsHtml = goals.map(goal => {
+      const progress = Calc().getGoalProgress(goal, records);
+      const savedStr = Calc().formatCurrency(progress.totalSaved);
+      const targetStr = Calc().formatCurrency(progress.targetAmount);
+      const fillWidth = Math.min(progress.percent, 100);
+
+      return `
+        <div class="dashboard-savings-card" data-goal-id="${goal.id}">
+          <div class="dash-goal-top">
+            <span class="dash-goal-icon" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">${goal.icon || '🎯'}</span>
+            <div class="dash-goal-title-wrap">
+              <span class="dash-goal-name">${escapeHtml(goal.name)}</span>
+              <span class="dash-goal-fraction">${savedStr} / ${targetStr}</span>
+            </div>
+            <button type="button" class="dash-goal-deposit-btn" data-dash-deposit="${goal.id}">+ Deposit</button>
+          </div>
+          <div class="dash-goal-progress-track">
+            <div class="dash-goal-progress-fill" style="width: ${fillWidth}%; background-color: ${goal.color || '#007AFF'};"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = `<div class="dashboard-savings-grid">${itemsHtml}</div>`;
+
+    if (typeof onDeposit === 'function') {
+      container.querySelectorAll('[data-dash-deposit]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onDeposit(btn.getAttribute('data-dash-deposit'));
+        });
+      });
+    }
+
+    const viewAllBtn = document.getElementById('btnDashboardViewAllSavings');
+    if (viewAllBtn && typeof onViewAll === 'function') {
+      viewAllBtn.onclick = onViewAll;
+    }
+  }
+
+  /**
+   * Renders the History View (Transactions & Savings Records grouped by date)
+   */
+  function renderHistory(monthKey, containerId = 'historyContainer', onDelete = null, onDeleteSavings = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -283,23 +572,66 @@
     const categories = Store().getCategories();
     const categoryMap = new Map(categories.map(c => [c.id, c]));
 
-    const dateGroups = Calc().groupTransactionsByDate(transactions, monthKey);
+    const savingsRecords = Store().getSavingsRecords ? Store().getSavingsRecords() : [];
+    const goals = Store().getSavingsGoals ? Store().getSavingsGoals() : [];
+    const goalMap = new Map(goals.map(g => [g.id, g]));
+
+    // Normalize both transactions and savings records for unified timeline
+    const allItems = [
+      ...transactions.map(t => ({ ...t, isSavings: false })),
+      ...savingsRecords.map(r => ({ ...r, isSavings: true }))
+    ];
+
+    const dateGroups = Calc().groupTransactionsByDate(allItems, monthKey);
 
     if (!dateGroups.length) {
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">📝</div>
-          <div class="empty-state-title">No Expenses Yet</div>
-          <div class="empty-state-desc">You haven't logged any expenses for this month. Tap "+" below to track your first expense!</div>
+          <div class="empty-state-title">No Activity Yet</div>
+          <div class="empty-state-desc">You haven't logged any expenses or savings for this month. Tap "+" below to start!</div>
         </div>
       `;
       return;
     }
 
     const html = dateGroups.map(group => {
-      const dayTotalFormatted = Calc().formatCurrency(group.total);
+      const expenseTotal = group.transactions
+        .filter(t => !t.isSavings)
+        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const dayTotalFormatted = Calc().formatCurrency(expenseTotal);
 
       const itemsHtml = group.transactions.map(t => {
+        if (t.isSavings) {
+          const goal = goalMap.get(t.goalId) || { name: 'Savings Goal', icon: '🎯', color: '#007AFF' };
+          const amountStr = Calc().formatCurrency(t.amount);
+          const isDeposit = t.type !== 'withdraw';
+          const sign = isDeposit ? '+' : '-';
+          const badgeLabel = isDeposit ? 'Goal Deposit' : 'Withdrawal';
+          const colorClass = isDeposit ? 'savings-deposit' : 'savings-withdraw';
+
+          return `
+            <div class="transaction-row savings-record-row" data-savings-id="${t.id}">
+              <div class="transaction-left">
+                <div class="transaction-icon" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">
+                  ${goal.icon || '🏦'}
+                </div>
+                <div class="transaction-details">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="transaction-cat-name">${escapeHtml(goal.name)}</span>
+                    <span class="savings-type-pill ${colorClass}">${badgeLabel}</span>
+                  </div>
+                  ${t.note ? `<span class="transaction-note">${escapeHtml(t.note)}</span>` : ''}
+                </div>
+              </div>
+              <div class="transaction-right">
+                <span class="transaction-amount ${colorClass}">${sign}${amountStr}</span>
+                <button class="transaction-delete-btn" data-delete-savings-id="${t.id}" aria-label="Delete Savings Record">✕</button>
+              </div>
+            </div>
+          `;
+        }
+
         const cat = categoryMap.get(t.categoryId) || { name: 'Uncategorized', icon: '❓', color: '#8E8E93' };
         const amountStr = Calc().formatCurrency(t.amount);
 
@@ -326,7 +658,7 @@
         <div class="history-date-group">
           <div class="history-date-header">
             <span class="history-date-title">${group.displayDate}</span>
-            <span class="history-day-total">Total: ${dayTotalFormatted}</span>
+            <span class="history-day-total">Spend: ${dayTotalFormatted}</span>
           </div>
           <div class="history-items-list">${itemsHtml}</div>
         </div>
@@ -336,11 +668,21 @@
     container.innerHTML = html;
 
     if (typeof onDelete === 'function') {
-      container.querySelectorAll('.transaction-delete-btn').forEach(btn => {
+      container.querySelectorAll('.transaction-delete-btn[data-delete-id]').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const id = btn.getAttribute('data-delete-id');
           onDelete(id);
+        });
+      });
+    }
+
+    if (typeof onDeleteSavings === 'function') {
+      container.querySelectorAll('.transaction-delete-btn[data-delete-savings-id]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-delete-savings-id');
+          onDeleteSavings(id);
         });
       });
     }
@@ -433,6 +775,10 @@
     renderSummaryCard,
     renderCategoryCards,
     renderQuickAddChips,
+    renderSavingsGoalChips,
+    renderSavingsOverviewCard,
+    renderSavingsGoals,
+    renderDashboardSavingsSnapshot,
     renderHistory,
     renderCategoriesManager,
     escapeHtml

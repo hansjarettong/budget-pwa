@@ -393,6 +393,153 @@ function groupTransactionsByDate(transactions, monthKey = null) {
   return result;
 }
 
+/**
+ * Calculates current progress, accumulated savings, and recommended monthly pace for a savings goal.
+ * @param {Object} goal - { id, name, targetAmount, targetDate?, icon?, color? }
+ * @param {Array<Object>} records - Array of savings records
+ * @param {string} [currentDateStr] - Reference date for remaining month calculation (default: today)
+ * @returns {{ goalId: string, name: string, icon: string, color: string, targetAmount: number, targetDate: string|null, totalSaved: number, remainingAmount: number, percent: number, isCompleted: boolean, remainingMonths: number|null, recommendedMonthly: number|null }}
+ */
+function getGoalProgress(goal, records, currentDateStr = null) {
+  const g = goal || {};
+  const goalId = g.id || '';
+  const name = g.name || 'Unnamed Goal';
+  const icon = g.icon || '🎯';
+  const color = g.color || '#007AFF';
+  const rawTarget = Number(g.targetAmount);
+  const targetAmount = isNaN(rawTarget) ? 0 : Math.max(0, Math.round(rawTarget * 100) / 100);
+  const targetDate = g.targetDate ? String(g.targetDate).split('T')[0] : null;
+
+  const goalRecords = Array.isArray(records) ? records.filter(r => r && r.goalId === goalId) : [];
+
+  let deposits = 0;
+  let withdrawals = 0;
+
+  for (const r of goalRecords) {
+    const amt = Number(r.amount) || 0;
+    if (r.type === 'withdraw') {
+      withdrawals += amt;
+    } else {
+      deposits += amt;
+    }
+  }
+
+  const netSaved = Math.max(0, Math.round((deposits - withdrawals) * 100) / 100);
+  const remainingAmount = Math.max(0, Math.round((targetAmount - netSaved) * 100) / 100);
+
+  let percent = 0;
+  if (targetAmount > 0) {
+    percent = Number(((netSaved / targetAmount) * 100).toFixed(1));
+  } else if (netSaved > 0) {
+    percent = 100;
+  }
+
+  const isCompleted = targetAmount > 0 && netSaved >= targetAmount;
+
+  let remainingMonths = null;
+  let recommendedMonthly = null;
+
+  if (targetDate && remainingAmount > 0) {
+    const refKey = currentDateStr ? getCurrentMonthKey(currentDateStr) : getCurrentMonthKey();
+    const [curYear, curMonth] = refKey.split('-').map(n => parseInt(n, 10));
+    const [tgtYear, tgtMonth] = targetDate.split('-').map(n => parseInt(n, 10));
+
+    if (!isNaN(curYear) && !isNaN(curMonth) && !isNaN(tgtYear) && !isNaN(tgtMonth)) {
+      const monthDiff = (tgtYear - curYear) * 12 + (tgtMonth - curMonth);
+      if (monthDiff > 0) {
+        remainingMonths = monthDiff;
+        recommendedMonthly = Math.ceil(remainingAmount / monthDiff);
+      } else {
+        remainingMonths = 0;
+        recommendedMonthly = remainingAmount;
+      }
+    }
+  }
+
+  return {
+    goalId,
+    name,
+    icon,
+    color,
+    targetAmount,
+    targetDate,
+    totalSaved: netSaved,
+    remainingAmount,
+    percent,
+    isCompleted,
+    remainingMonths,
+    recommendedMonthly
+  };
+}
+
+/**
+ * Calculates total savings deposited, withdrawn, and net saved for a given month.
+ * @param {Array<Object>} records - Array of savings records
+ * @param {string} [monthKey] - optional 'YYYY-MM'
+ * @returns {{ totalDeposited: number, totalWithdrawn: number, netSaved: number }}
+ */
+function getMonthlySavingsSummary(records, monthKey = null) {
+  if (!Array.isArray(records)) {
+    return { totalDeposited: 0, totalWithdrawn: 0, netSaved: 0 };
+  }
+
+  const filtered = monthKey
+    ? records.filter(r => r && r.date && String(r.date).startsWith(monthKey))
+    : records;
+
+  let totalDeposited = 0;
+  let totalWithdrawn = 0;
+
+  for (const r of filtered) {
+    const amt = Number(r.amount) || 0;
+    if (r.type === 'withdraw') {
+      totalWithdrawn += amt;
+    } else {
+      totalDeposited += amt;
+    }
+  }
+
+  totalDeposited = Math.round(totalDeposited * 100) / 100;
+  totalWithdrawn = Math.round(totalWithdrawn * 100) / 100;
+  const netSaved = Math.round((totalDeposited - totalWithdrawn) * 100) / 100;
+
+  return {
+    totalDeposited,
+    totalWithdrawn,
+    netSaved
+  };
+}
+
+/**
+ * Calculates complete monthly financial breakdown separating consumable living expenses from savings goals,
+ * and computing total monthly cash outflow.
+ * @param {Array<Object>} categories
+ * @param {Array<Object>} transactions
+ * @param {Array<Object>} savingsRecords
+ * @param {string} [monthKey] - 'YYYY-MM'
+ * @returns {Object}
+ */
+function getOverallMonthlyBreakdown(categories, transactions, savingsRecords, monthKey = null) {
+  const overall = getOverallMonthlyStatus(categories, transactions, monthKey);
+  const savings = getMonthlySavingsSummary(savingsRecords, monthKey);
+  const totalOutflow = Math.round((overall.totalSpent + savings.totalDeposited) * 100) / 100;
+
+  return {
+    // Living expenses
+    totalBudget: overall.totalBudget,
+    totalSpent: overall.totalSpent,
+    totalRemaining: overall.totalRemaining,
+    overallPercent: overall.overallPercent,
+    status: overall.status,
+    // Savings allocations
+    savingsDeposited: savings.totalDeposited,
+    savingsWithdrawn: savings.totalWithdrawn,
+    netSaved: savings.netSaved,
+    // Combined cash outflow
+    totalOutflow
+  };
+}
+
 // Bundle all calculation functions
 const BudgetCalculations = {
   SUPPORTED_CURRENCIES,
@@ -407,7 +554,10 @@ const BudgetCalculations = {
   getCategorySpending,
   getCategoryBudgetStatus,
   getOverallMonthlyStatus,
-  groupTransactionsByDate
+  groupTransactionsByDate,
+  getGoalProgress,
+  getMonthlySavingsSummary,
+  getOverallMonthlyBreakdown
 };
 
 // Expose on globalThis / window for browser script tags

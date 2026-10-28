@@ -935,7 +935,7 @@ test('Receipt scanning PWA integration: index.html, CSS, sw.js, and app.js wirin
   assert(css.includes('.action-sheet-option-btn'), 'components.css defines action sheet option buttons');
 
   // 3. sw.js checks
-  assert(sw.includes("CACHE_VERSION = 'v6'"), 'sw.js CACHE_VERSION bumped to v6');
+  assert(/CACHE_VERSION\s*=\s*'v[67]'/.test(sw), 'sw.js CACHE_VERSION defined');
   assert(sw.includes("'./js/ocr-engine.js'"), 'sw.js precaches ocr-engine.js');
   assert(sw.includes("'./js/receipt-parser.js'"), 'sw.js precaches receipt-parser.js');
   assert(sw.includes('cdn.jsdelivr.net') && sw.includes('tessdata'), 'sw.js includes cache-first runtime caching for OCR assets');
@@ -966,6 +966,301 @@ test('BudgetOCR HEIC format detection and conversion support', () => {
   assertEquals(BudgetOCR.isHeicImage({ type: 'image/png', name: 'screenshot.png' }), false, 'Rejects standard PNG');
   assertEquals(BudgetOCR.isHeicImage(null), false, 'Handles null safely');
   assertEquals(BudgetOCR.isHeicImage({}), false, 'Handles empty object safely');
+});
+
+// ============================================================================
+// Savings Feature Tests
+// ============================================================================
+
+test('Savings Goals CRUD operations in BudgetStore', () => {
+  BudgetStore.resetToDefaultData();
+
+  // Initially empty
+  let goals = BudgetStore.getSavingsGoals();
+  assertEquals(goals.length, 0, 'Initial savings goals should be empty');
+
+  // Create Goal
+  const goal1 = BudgetStore.saveSavingsGoal({
+    name: 'Summer Trip to Japan',
+    targetAmount: 300000,
+    targetDate: '2027-07-01',
+    icon: '✈️',
+    color: '#007AFF'
+  });
+
+  assert(Boolean(goal1.id), 'Created goal should have unique ID');
+  assertEquals(goal1.name, 'Summer Trip to Japan', 'Goal name matches');
+  assertEquals(goal1.targetAmount, 300000, 'Goal target amount matches');
+  assertEquals(goal1.targetDate, '2027-07-01', 'Goal target date matches');
+  assertEquals(goal1.icon, '✈️', 'Goal icon matches');
+
+  // Retrieve by ID
+  const retrieved = BudgetStore.getSavingsGoalById(goal1.id);
+  assert(retrieved !== null, 'Should retrieve goal by ID');
+  assertEquals(retrieved.name, 'Summer Trip to Japan', 'Retrieved name matches');
+
+  // Update Goal
+  BudgetStore.saveSavingsGoal({
+    id: goal1.id,
+    name: 'Summer Trip to Japan & Korea',
+    targetAmount: 350000,
+    targetDate: '2027-08-01',
+    icon: '🌸',
+    color: '#FF2D55'
+  });
+
+  const updated = BudgetStore.getSavingsGoalById(goal1.id);
+  assertEquals(updated.name, 'Summer Trip to Japan & Korea', 'Updated name saved');
+  assertEquals(updated.targetAmount, 350000, 'Updated target amount saved');
+  assertEquals(updated.icon, '🌸', 'Updated icon saved');
+
+  // Delete Goal
+  const deleteResult = BudgetStore.deleteSavingsGoal(goal1.id);
+  assertEquals(deleteResult, true, 'deleteSavingsGoal returns true');
+  assertEquals(BudgetStore.getSavingsGoalById(goal1.id), null, 'Goal no longer exists after deletion');
+});
+
+test('Savings Records CRUD & association with goals', () => {
+  BudgetStore.resetToDefaultData();
+
+  const goal = BudgetStore.saveSavingsGoal({
+    name: 'MacBook Pro',
+    targetAmount: 250000,
+    icon: '💻'
+  });
+
+  // Add Deposit Record
+  const deposit = BudgetStore.addSavingsRecord({
+    goalId: goal.id,
+    amount: 50000,
+    type: 'deposit',
+    date: '2026-10-15',
+    note: 'October paycheck allocation'
+  });
+
+  assert(Boolean(deposit.id), 'Deposit record has id');
+  assertEquals(deposit.amount, 50000, 'Deposit amount matches');
+  assertEquals(deposit.type, 'deposit', 'Deposit type matches');
+
+  // Add Withdrawal Record
+  const withdraw = BudgetStore.addSavingsRecord({
+    goalId: goal.id,
+    amount: 10000,
+    type: 'withdraw',
+    date: '2026-10-20',
+    note: 'Temporary emergency withdrawal'
+  });
+
+  assertEquals(withdraw.amount, 10000, 'Withdraw amount matches');
+  assertEquals(withdraw.type, 'withdraw', 'Withdraw type matches');
+
+  // Query records
+  const allRecords = BudgetStore.getSavingsRecords();
+  assertEquals(allRecords.length, 2, 'Should have 2 savings records');
+
+  const goalRecords = BudgetStore.getSavingsRecords({ goalId: goal.id });
+  assertEquals(goalRecords.length, 2, 'Should filter by goalId');
+
+  const octRecords = BudgetStore.getSavingsRecords({ monthKey: '2026-10' });
+  assertEquals(octRecords.length, 2, 'Should filter by monthKey');
+
+  const novRecords = BudgetStore.getSavingsRecords({ monthKey: '2026-11' });
+  assertEquals(novRecords.length, 0, 'No records in 2026-11');
+
+  // Deleting record
+  BudgetStore.deleteSavingsRecord(withdraw.id);
+  assertEquals(BudgetStore.getSavingsRecords().length, 1, '1 record remaining after record deletion');
+
+  // Deleting goal cleans up associated records
+  BudgetStore.deleteSavingsGoal(goal.id);
+  assertEquals(BudgetStore.getSavingsRecords().length, 0, 'Goal records cleaned up when goal deleted');
+});
+
+test('getGoalProgress calculation and recommended monthly pace', () => {
+  const goal = {
+    id: 'test_goal',
+    name: 'Japan Vacation',
+    targetAmount: 300000,
+    targetDate: '2027-05-01',
+    icon: '✈️',
+    color: '#007AFF'
+  };
+
+  const records = [
+    { goalId: 'test_goal', amount: 60000, type: 'deposit', date: '2026-09-01' },
+    { goalId: 'test_goal', amount: 40000, type: 'deposit', date: '2026-10-01' },
+    { goalId: 'test_goal', amount: 10000, type: 'withdraw', date: '2026-10-15' },
+    { goalId: 'other_goal', amount: 99999, type: 'deposit', date: '2026-10-01' }
+  ];
+
+  // Net saved: 60k + 40k - 10k = 90k
+  // Target: 300k
+  // Remaining: 210k
+  // Percent: (90 / 300) * 100 = 30.0%
+  const progress = BudgetCalculations.getGoalProgress(goal, records, '2026-10-01');
+
+  assertEquals(progress.totalSaved, 90000, 'Total net saved is 90,000');
+  assertEquals(progress.remainingAmount, 210000, 'Remaining amount is 210,000');
+  assertEquals(progress.percent, 30.0, 'Progress percentage is 30.0%');
+  assertEquals(progress.isCompleted, false, 'Goal is not completed');
+
+  // Remaining months from 2026-10 to 2027-05: (2027 - 2026)*12 + (5 - 10) = 12 - 5 = 7 months
+  // Recommended monthly: 210,000 / 7 = 30,000 / month
+  assertEquals(progress.remainingMonths, 7, 'Remaining months is 7');
+  assertEquals(progress.recommendedMonthly, 30000, 'Recommended monthly pace is 30,000');
+
+  // Test fully completed goal
+  const completedRecords = [
+    { goalId: 'test_goal', amount: 320000, type: 'deposit', date: '2026-10-01' }
+  ];
+  const completedProgress = BudgetCalculations.getGoalProgress(goal, completedRecords, '2026-10-01');
+  assertEquals(completedProgress.totalSaved, 320000, 'Total saved exceeds target');
+  assertEquals(completedProgress.remainingAmount, 0, 'Remaining amount is 0');
+  assertEquals(completedProgress.percent, 106.7, 'Progress percent reflects >100%');
+  assertEquals(completedProgress.isCompleted, true, 'isCompleted is true');
+});
+
+test('getMonthlySavingsSummary calculates monthly deposits, withdrawals and net savings', () => {
+  const records = [
+    { id: '1', goalId: 'g1', amount: 25000, type: 'deposit', date: '2026-10-05' },
+    { id: '2', goalId: 'g2', amount: 15000, type: 'deposit', date: '2026-10-18' },
+    { id: '3', goalId: 'g1', amount: 5000, type: 'withdraw', date: '2026-10-22' },
+    { id: '4', goalId: 'g1', amount: 30000, type: 'deposit', date: '2026-09-10' }
+  ];
+
+  const octSummary = BudgetCalculations.getMonthlySavingsSummary(records, '2026-10');
+  assertEquals(octSummary.totalDeposited, 40000, 'October total deposits: 25k + 15k = 40,000');
+  assertEquals(octSummary.totalWithdrawn, 5000, 'October withdrawals: 5,000');
+  assertEquals(octSummary.netSaved, 35000, 'October net saved: 35,000');
+
+  const sepSummary = BudgetCalculations.getMonthlySavingsSummary(records, '2026-09');
+  assertEquals(sepSummary.totalDeposited, 30000, 'September total deposits: 30,000');
+  assertEquals(sepSummary.totalWithdrawn, 0, 'September withdrawals: 0');
+  assertEquals(sepSummary.netSaved, 30000, 'September net saved: 30,000');
+});
+
+test('getOverallMonthlyBreakdown separates living expenses from savings goals and computes total outflow', () => {
+  const categories = [
+    { id: 'cat_dining', name: 'Dining', limit: 40000 },
+    { id: 'cat_groceries', name: 'Groceries', limit: 50000 }
+  ];
+
+  const transactions = [
+    { categoryId: 'cat_dining', amount: 15000, date: '2026-10-02' },
+    { categoryId: 'cat_groceries', amount: 35000, date: '2026-10-12' }
+  ];
+
+  const savingsRecords = [
+    { goalId: 'goal_trip', amount: 30000, type: 'deposit', date: '2026-10-01' },
+    { goalId: 'goal_tech', amount: 10000, type: 'deposit', date: '2026-10-15' },
+    { goalId: 'goal_tech', amount: 2000, type: 'withdraw', date: '2026-10-20' }
+  ];
+
+  const breakdown = BudgetCalculations.getOverallMonthlyBreakdown(categories, transactions, savingsRecords, '2026-10');
+
+  // Living expenses check
+  assertEquals(breakdown.totalBudget, 90000, 'Total living budget is 90,000');
+  assertEquals(breakdown.totalSpent, 50000, 'Total living spending is 50,000');
+  assertEquals(breakdown.totalRemaining, 40000, 'Living budget remaining is 40,000');
+  assertEquals(breakdown.status, 'safe', 'Living expenses status is safe');
+
+  // Savings check
+  assertEquals(breakdown.savingsDeposited, 40000, 'Savings deposited this month is 40,000');
+  assertEquals(breakdown.savingsWithdrawn, 2000, 'Savings withdrawn this month is 2,000');
+  assertEquals(breakdown.netSaved, 38000, 'Net saved this month is 38,000');
+
+  // Combined Cash Outflow: Living Spent (50k) + Savings Set Aside (40k) = 90k
+  assertEquals(breakdown.totalOutflow, 90000, 'Total monthly cash outflow is 90,000');
+});
+
+test('JSON Backup export and restore preserves savings goals and records with backwards compatibility', () => {
+  BudgetStore.resetToDefaultData();
+
+  BudgetStore.saveSavingsGoal({
+    id: 'goal_test_export',
+    name: 'Emergency Fund',
+    targetAmount: 500000,
+    icon: '🛡️',
+    color: '#10b981'
+  });
+
+  BudgetStore.addSavingsRecord({
+    goalId: 'goal_test_export',
+    amount: 100000,
+    type: 'deposit',
+    date: '2026-10-01',
+    note: 'Initial deposit'
+  });
+
+  // Export JSON
+  const jsonStr = BudgetStore.exportDataJSON();
+  const parsedExport = JSON.parse(jsonStr);
+
+  assert(Array.isArray(parsedExport.savingsGoals), 'Export contains savingsGoals array');
+  assertEquals(parsedExport.savingsGoals.length, 1, 'Export has 1 savings goal');
+  assert(Array.isArray(parsedExport.savingsRecords), 'Export contains savingsRecords array');
+  assertEquals(parsedExport.savingsRecords.length, 1, 'Export has 1 savings record');
+
+  // Reset and verify empty
+  BudgetStore.resetToDefaultData();
+  assertEquals(BudgetStore.getSavingsGoals().length, 0, 'Cleared goals after reset');
+  assertEquals(BudgetStore.getSavingsRecords().length, 0, 'Cleared records after reset');
+
+  // Restore
+  const importResult = BudgetStore.importDataJSON(jsonStr);
+  assertEquals(importResult.success, true, 'Import succeeded');
+  assertEquals(importResult.savingsGoalsCount, 1, 'Restored 1 savings goal');
+  assertEquals(importResult.savingsRecordsCount, 1, 'Restored 1 savings record');
+
+  const restoredGoal = BudgetStore.getSavingsGoalById('goal_test_export');
+  assert(restoredGoal !== null, 'Restored goal exists');
+  assertEquals(restoredGoal.name, 'Emergency Fund', 'Restored goal name matches');
+
+  // Backwards compatibility with legacy backups (without savingsGoals/savingsRecords)
+  const legacyBackup = JSON.stringify({
+    version: 1,
+    categories: [{ id: 'cat_test', name: 'Test', limit: 1000 }],
+    transactions: []
+  });
+
+  const legacyImportResult = BudgetStore.importDataJSON(legacyBackup);
+  assertEquals(legacyImportResult.success, true, 'Legacy import succeeded');
+  assertEquals(legacyImportResult.categoriesCount, 1, 'Legacy categories restored');
+});
+
+test('Savings Feature PWA UI integration: index.html, components.css, and app.js', () => {
+  if (typeof readFile !== 'function') {
+    return;
+  }
+
+  const html = readFile('index.html');
+  const css = readFile('css/components.css');
+  const app = readFile('js/app.js');
+
+  // 1. HTML checks
+  assert(html.includes('id="view-savings"'), 'index.html contains #view-savings view section');
+  assert(html.includes('data-tab="savings"'), 'index.html contains savings bottom tab button');
+  assert(html.includes('id="savingsGoalsContainer"'), 'index.html contains savingsGoalsContainer');
+  assert(html.includes('id="savingsGoalModal"'), 'index.html contains savingsGoalModal');
+  assert(html.includes('id="savingsWithdrawModal"'), 'index.html contains savingsWithdrawModal');
+  assert(html.includes('id="quickAddTypeSegmentedControl"'), 'index.html contains Quick Add segmented mode control');
+  assert(html.includes('id="btnTypeSavings"'), 'index.html contains btnTypeSavings toggle');
+  assert(html.includes('id="dashboardSavingsContainer"'), 'index.html contains dashboardSavingsContainer');
+
+  // 2. CSS checks
+  assert(css.includes('.savings-hero-card'), 'components.css defines .savings-hero-card');
+  assert(css.includes('.savings-goal-card'), 'components.css defines .savings-goal-card');
+  assert(css.includes('.sheet-type-segmented-control'), 'components.css defines .sheet-type-segmented-control');
+  assert(css.includes('.summary-outflow-row'), 'components.css defines .summary-outflow-row');
+  assert(css.includes('.dashboard-savings-card'), 'components.css defines .dashboard-savings-card');
+
+  // 3. app.js checks
+  assert(app.includes('setupSavingsGoalModal'), 'app.js includes setupSavingsGoalModal');
+  assert(app.includes('setupSavingsWithdrawModal'), 'app.js includes setupSavingsWithdrawModal');
+  assert(app.includes('setQuickAddMode'), 'app.js includes setQuickAddMode toggle');
+  assert(app.includes('addSavingsRecord'), 'app.js records savings deposits/withdrawals');
+  assert(app.includes('renderSavingsGoals'), 'app.js renders savings goals');
+  assert(app.includes('renderDashboardSavingsSnapshot'), 'app.js renders dashboard savings snapshot');
 });
 
 log('\n-----------------------------------------');

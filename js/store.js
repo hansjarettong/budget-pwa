@@ -37,6 +37,8 @@ function getStorage() {
 const STORAGE_KEYS = {
   CATEGORIES: 'budget_pwa_categories',
   TRANSACTIONS: 'budget_pwa_transactions',
+  SAVINGS_GOALS: 'budget_pwa_savings_goals',
+  SAVINGS_RECORDS: 'budget_pwa_savings_records',
   CURRENCY: 'budget_pwa_currency',
   INITIALIZED: 'budget_pwa_initialized'
 };
@@ -311,7 +313,174 @@ function getMonthsWithTransactions() {
 }
 
 /**
- * Exports all data (categories + transactions) as JSON string.
+ * Retrieves all savings goals from storage.
+ * @returns {Array<Object>}
+ */
+function getSavingsGoals() {
+  const storage = getStorage();
+  const raw = storage.getItem(STORAGE_KEYS.SAVINGS_GOALS);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('Failed to parse savings goals from storage:', e);
+  }
+  return [];
+}
+
+/**
+ * Retrieves a single savings goal by id.
+ * @param {string} goalId
+ * @returns {Object|null}
+ */
+function getSavingsGoalById(goalId) {
+  if (!goalId) return null;
+  const goals = getSavingsGoals();
+  return goals.find(g => g.id === goalId) || null;
+}
+
+/**
+ * Saves a savings goal (creates new or updates existing).
+ * @param {Object} goal - { id?, name, targetAmount, targetDate?, icon?, color? }
+ * @returns {Object} Saved goal
+ */
+function saveSavingsGoal(goal) {
+  if (!goal || typeof goal !== 'object') {
+    throw new Error('Savings goal must be an object');
+  }
+
+  const goals = getSavingsGoals();
+  const sanitized = {
+    id: goal.id || generateId('goal'),
+    name: String(goal.name || 'Unnamed Goal').trim(),
+    targetAmount: Math.max(0, Math.round((Number(goal.targetAmount) || 0) * 100) / 100),
+    targetDate: goal.targetDate ? String(goal.targetDate).split('T')[0] : null,
+    icon: String(goal.icon || '🎯').trim(),
+    color: String(goal.color || '#007AFF').trim(),
+    createdAt: goal.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const existingIdx = goals.findIndex(g => g.id === sanitized.id);
+  if (existingIdx >= 0) {
+    goals[existingIdx] = sanitized;
+  } else {
+    goals.push(sanitized);
+  }
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(goals));
+  return sanitized;
+}
+
+/**
+ * Deletes a savings goal by id and cleans up all its associated savings records.
+ * @param {string} goalId
+ * @returns {boolean} True if deleted, false if not found
+ */
+function deleteSavingsGoal(goalId) {
+  if (!goalId) return false;
+  const goals = getSavingsGoals();
+  const index = goals.findIndex(g => g.id === goalId);
+  if (index === -1) return false;
+
+  goals.splice(index, 1);
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(goals));
+
+  // Also remove records associated with this goal
+  const records = getSavingsRecords();
+  const filteredRecords = records.filter(r => r.goalId !== goalId);
+  storage.setItem(STORAGE_KEYS.SAVINGS_RECORDS, JSON.stringify(filteredRecords));
+
+  return true;
+}
+
+/**
+ * Retrieves all savings records, optionally filtered by goalId, monthKey, or type.
+ * @param {Object} [filter] - { goalId?: string, monthKey?: string, type?: 'deposit'|'withdraw' }
+ * @returns {Array<Object>}
+ */
+function getSavingsRecords(filter = null) {
+  const storage = getStorage();
+  const raw = storage.getItem(STORAGE_KEYS.SAVINGS_RECORDS);
+  if (!raw) return [];
+  try {
+    let list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    if (filter && typeof filter === 'object') {
+      if (filter.goalId) {
+        list = list.filter(r => r.goalId === filter.goalId);
+      }
+      if (filter.monthKey) {
+        list = list.filter(r => r.date && String(r.date).startsWith(filter.monthKey));
+      }
+      if (filter.type) {
+        list = list.filter(r => r.type === filter.type);
+      }
+    }
+    return list;
+  } catch (e) {
+    console.warn('Failed to parse savings records from storage:', e);
+    return [];
+  }
+}
+
+/**
+ * Adds a new savings record (deposit or withdrawal).
+ * @param {Object} recordData - { goalId, amount, type?, date?, note? }
+ * @returns {Object} Newly created record
+ */
+function addSavingsRecord({ goalId, amount, type = 'deposit', date, note }) {
+  const numAmount = Number(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    throw new Error('Valid positive savings amount is required');
+  }
+  if (!goalId) {
+    throw new Error('Valid savings goalId is required');
+  }
+
+  const recordType = type === 'withdraw' ? 'withdraw' : 'deposit';
+  const newRecord = {
+    id: generateId('srec'),
+    goalId: String(goalId),
+    amount: Math.round(numAmount * 100) / 100,
+    type: recordType,
+    date: date ? String(date).split('T')[0] : getTodayDateString(),
+    note: String(note || '').trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  const records = getSavingsRecords();
+  records.unshift(newRecord);
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_RECORDS, JSON.stringify(records));
+  return newRecord;
+}
+
+/**
+ * Deletes a savings record by id.
+ * @param {string} recordId
+ * @returns {boolean} True if deleted, false if not found
+ */
+function deleteSavingsRecord(recordId) {
+  if (!recordId) return false;
+  const records = getSavingsRecords();
+  const index = records.findIndex(r => r.id === recordId);
+  if (index === -1) return false;
+
+  records.splice(index, 1);
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_RECORDS, JSON.stringify(records));
+  return true;
+}
+
+/**
+ * Exports all data (categories + transactions + savings) as JSON string.
  * @returns {string}
  */
 function exportDataJSON() {
@@ -320,7 +489,9 @@ function exportDataJSON() {
     exportedAt: new Date().toISOString(),
     currency: getCurrency(),
     categories: getCategories(),
-    transactions: getTransactions()
+    transactions: getTransactions(),
+    savingsGoals: getSavingsGoals(),
+    savingsRecords: getSavingsRecords()
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -372,6 +543,8 @@ function importDataJSON(jsonInput) {
     const storage = getStorage();
     let categoriesCount = 0;
     let transactionsCount = 0;
+    let savingsGoalsCount = 0;
+    let savingsRecordsCount = 0;
 
     if (data.currency && typeof data.currency === 'string') {
       setCurrency(data.currency);
@@ -403,10 +576,41 @@ function importDataJSON(jsonInput) {
       transactionsCount = sanitizedTransactions.length;
     }
 
+    if (Array.isArray(data.savingsGoals)) {
+      const sanitizedGoals = data.savingsGoals.map(g => ({
+        id: g.id || generateId('goal'),
+        name: String(g.name || 'Unnamed Goal').trim(),
+        targetAmount: Math.max(0, Math.round((Number(g.targetAmount) || 0) * 100) / 100),
+        targetDate: g.targetDate ? String(g.targetDate).split('T')[0] : null,
+        icon: String(g.icon || '🎯').trim(),
+        color: String(g.color || '#007AFF').trim(),
+        createdAt: g.createdAt || new Date().toISOString(),
+        updatedAt: g.updatedAt || new Date().toISOString()
+      }));
+      storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(sanitizedGoals));
+      savingsGoalsCount = sanitizedGoals.length;
+    }
+
+    if (Array.isArray(data.savingsRecords)) {
+      const sanitizedRecords = data.savingsRecords.map(r => ({
+        id: r.id || generateId('srec'),
+        goalId: String(r.goalId || ''),
+        amount: Math.max(0, Math.round((Number(r.amount) || 0) * 100) / 100),
+        type: r.type === 'withdraw' ? 'withdraw' : 'deposit',
+        date: r.date ? String(r.date).split('T')[0] : getTodayDateString(),
+        note: String(r.note || '').trim(),
+        createdAt: r.createdAt || new Date().toISOString()
+      }));
+      storage.setItem(STORAGE_KEYS.SAVINGS_RECORDS, JSON.stringify(sanitizedRecords));
+      savingsRecordsCount = sanitizedRecords.length;
+    }
+
     return {
       success: true,
       categoriesCount,
-      transactionsCount
+      transactionsCount,
+      savingsGoalsCount,
+      savingsRecordsCount
     };
   } catch (err) {
     return {
@@ -516,10 +720,14 @@ function resetToDefaultData() {
   const defaultCats = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
   storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(defaultCats));
   storage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify([]));
+  storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify([]));
+  storage.setItem(STORAGE_KEYS.SAVINGS_RECORDS, JSON.stringify([]));
   storage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   return {
     categories: defaultCats,
-    transactions: []
+    transactions: [],
+    savingsGoals: [],
+    savingsRecords: []
   };
 }
 
@@ -612,6 +820,13 @@ const BudgetStore = {
   updateTransaction,
   deleteTransaction,
   getMonthsWithTransactions,
+  getSavingsGoals,
+  getSavingsGoalById,
+  saveSavingsGoal,
+  deleteSavingsGoal,
+  getSavingsRecords,
+  addSavingsRecord,
+  deleteSavingsRecord,
   exportDataJSON,
   importDataJSON,
   importDataJSONAsync,

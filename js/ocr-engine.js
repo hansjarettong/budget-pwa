@@ -177,9 +177,9 @@
     let inputBlob = fileOrBlob;
     if (isHeicImage(fileOrBlob)) {
       const heicConverter = (typeof root !== 'undefined' && root.heic2any) ||
-                            (typeof window !== 'undefined' && window.heic2any) ||
-                            (typeof globalThis !== 'undefined' && globalThis.heic2any) ||
-                            (typeof heic2any === 'function' ? heic2any : null);
+        (typeof window !== 'undefined' && window.heic2any) ||
+        (typeof globalThis !== 'undefined' && globalThis.heic2any) ||
+        (typeof heic2any === 'function' ? heic2any : null);
 
       if (typeof heicConverter === 'function') {
         try {

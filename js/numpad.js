@@ -16,6 +16,18 @@
 })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this, function () {
   'use strict';
 
+  function formatWithCommas(valStr) {
+    if (!valStr && valStr !== 0) return '0';
+    const str = String(valStr);
+    if (str === '0') return '0';
+    const isNegative = str.startsWith('-');
+    const cleanStr = isNegative ? str.slice(1) : str;
+    const parts = cleanStr.split('.');
+    const intFormatted = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const result = parts.length > 1 ? `${intFormatted}.${parts[1]}` : intFormatted;
+    return isNegative ? `-${result}` : result;
+  }
+
   class NumpadController {
     constructor(options = {}) {
       this.currentBuffer = '0';
@@ -92,16 +104,17 @@
     }
 
     getDisplayString() {
-      return this.currentBuffer;
+      return formatWithCommas(this.currentBuffer);
     }
 
     _notify() {
-      this.onAmountChange(this.currentBuffer, this.getNumericValue());
+      this.onAmountChange(this.getDisplayString(), this.getNumericValue(), this.currentBuffer);
     }
   }
 
   return {
-    NumpadController
+    NumpadController,
+    formatWithCommas
   };
 });
 

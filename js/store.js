@@ -47,16 +47,16 @@ const STORAGE_KEYS = {
  * 10 Pre-configured default budget categories with icons, colors, and initial monthly limits (in JPY).
  */
 const DEFAULT_CATEGORIES = [
-  { id: 'cat_dining', name: 'Dining', icon: '🍔', limit: 40000, color: '#f97316' },
-  { id: 'cat_groceries', name: 'Groceries', icon: '🛒', limit: 50000, color: '#10b981' },
-  { id: 'cat_transport', name: 'Transport', icon: '🚇', limit: 15000, color: '#06b6d4' },
-  { id: 'cat_bills', name: 'Bills & Utilities', icon: '⚡', limit: 30000, color: '#eab308' },
-  { id: 'cat_shopping', name: 'Shopping', icon: '🛍️', limit: 20000, color: '#ec4899' },
-  { id: 'cat_entertainment', name: 'Entertainment', icon: '🎬', limit: 15000, color: '#8b5cf6' },
-  { id: 'cat_health', name: 'Health & Wellness', icon: '💊', limit: 10000, color: '#ef4444' },
-  { id: 'cat_personal', name: 'Personal Care', icon: '💈', limit: 10000, color: '#3b82f6' },
-  { id: 'cat_education', name: 'Education', icon: '📚', limit: 10000, color: '#14b8a6' },
-  { id: 'cat_misc', name: 'Miscellaneous', icon: '📦', limit: 10000, color: '#64748b' }
+  { id: 'cat_dining', name: 'Dining', icon: '🍔', limit: 40000, color: '#fed7aa' },
+  { id: 'cat_groceries', name: 'Groceries', icon: '🛒', limit: 50000, color: '#a7f3d0' },
+  { id: 'cat_transport', name: 'Transport', icon: '🚇', limit: 15000, color: '#bae6fd' },
+  { id: 'cat_bills', name: 'Bills & Utilities', icon: '⚡', limit: 30000, color: '#fef08a' },
+  { id: 'cat_shopping', name: 'Shopping', icon: '🛍️', limit: 20000, color: '#fbcfe8' },
+  { id: 'cat_entertainment', name: 'Entertainment', icon: '🎬', limit: 15000, color: '#ddd6fe' },
+  { id: 'cat_health', name: 'Health & Wellness', icon: '💊', limit: 10000, color: '#fecaca' },
+  { id: 'cat_personal', name: 'Personal Care', icon: '💈', limit: 10000, color: '#bfdbfe' },
+  { id: 'cat_education', name: 'Education', icon: '📚', limit: 10000, color: '#99f6e4' },
+  { id: 'cat_misc', name: 'Miscellaneous', icon: '📦', limit: 10000, color: '#e2e8f0' }
 ];
 
 /**
@@ -189,6 +189,55 @@ function deleteCategory(categoryId) {
   const storage = getStorage();
   storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
   return true;
+}
+
+/**
+ * Reorders categories based on an array of category IDs.
+ * @param {Array<string>} orderedIds
+ * @returns {Array<Object>} Updated categories list
+ */
+function saveCategoriesOrder(orderedIds) {
+  if (!Array.isArray(orderedIds)) return getCategories();
+  const categories = getCategories();
+  const idMap = new Map(categories.map(c => [c.id, c]));
+  const reordered = [];
+
+  for (const id of orderedIds) {
+    if (idMap.has(id)) {
+      reordered.push(idMap.get(id));
+      idMap.delete(id);
+    }
+  }
+  for (const remaining of idMap.values()) {
+    reordered.push(remaining);
+  }
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(reordered));
+  return reordered;
+}
+
+/**
+ * Moves a category up or down by one position.
+ * @param {string} categoryId
+ * @param {'up'|'down'} direction
+ * @returns {Array<Object>} Updated categories list
+ */
+function moveCategory(categoryId, direction) {
+  const categories = getCategories();
+  const index = categories.findIndex(c => c.id === categoryId);
+  if (index === -1) return categories;
+
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= categories.length) return categories;
+
+  const temp = categories[index];
+  categories[index] = categories[targetIndex];
+  categories[targetIndex] = temp;
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+  return categories;
 }
 
 /**
@@ -397,6 +446,55 @@ function deleteSavingsGoal(goalId) {
   storage.setItem(STORAGE_KEYS.SAVINGS_RECORDS, JSON.stringify(filteredRecords));
 
   return true;
+}
+
+/**
+ * Reorders savings goals based on an array of goal IDs.
+ * @param {Array<string>} orderedIds
+ * @returns {Array<Object>} Updated goals list
+ */
+function saveSavingsGoalsOrder(orderedIds) {
+  if (!Array.isArray(orderedIds)) return getSavingsGoals();
+  const goals = getSavingsGoals();
+  const idMap = new Map(goals.map(g => [g.id, g]));
+  const reordered = [];
+
+  for (const id of orderedIds) {
+    if (idMap.has(id)) {
+      reordered.push(idMap.get(id));
+      idMap.delete(id);
+    }
+  }
+  for (const remaining of idMap.values()) {
+    reordered.push(remaining);
+  }
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(reordered));
+  return reordered;
+}
+
+/**
+ * Moves a savings goal up or down by one position.
+ * @param {string} goalId
+ * @param {'up'|'down'} direction
+ * @returns {Array<Object>} Updated goals list
+ */
+function moveSavingsGoal(goalId, direction) {
+  const goals = getSavingsGoals();
+  const index = goals.findIndex(g => g.id === goalId);
+  if (index === -1) return goals;
+
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= goals.length) return goals;
+
+  const temp = goals[index];
+  goals[index] = goals[targetIndex];
+  goals[targetIndex] = temp;
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(goals));
+  return goals;
 }
 
 /**
@@ -815,6 +913,8 @@ const BudgetStore = {
   getCategoryById,
   saveCategory,
   deleteCategory,
+  saveCategoriesOrder,
+  moveCategory,
   getTransactions,
   addTransaction,
   updateTransaction,
@@ -824,6 +924,8 @@ const BudgetStore = {
   getSavingsGoalById,
   saveSavingsGoal,
   deleteSavingsGoal,
+  saveSavingsGoalsOrder,
+  moveSavingsGoal,
   getSavingsRecords,
   addSavingsRecord,
   deleteSavingsRecord,

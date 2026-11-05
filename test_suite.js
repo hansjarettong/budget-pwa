@@ -935,7 +935,7 @@ test('Receipt scanning PWA integration: index.html, CSS, sw.js, and app.js wirin
   assert(css.includes('.action-sheet-option-btn'), 'components.css defines action sheet option buttons');
 
   // 3. sw.js checks
-  assert(/CACHE_VERSION\s*=\s*'v[67]'/.test(sw), 'sw.js CACHE_VERSION defined');
+  assert(/CACHE_VERSION\s*=\s*'v[0-9]+'/.test(sw), 'sw.js CACHE_VERSION defined');
   assert(sw.includes("'./js/ocr-engine.js'"), 'sw.js precaches ocr-engine.js');
   assert(sw.includes("'./js/receipt-parser.js'"), 'sw.js precaches receipt-parser.js');
   assert(sw.includes('cdn.jsdelivr.net') && sw.includes('tessdata'), 'sw.js includes cache-first runtime caching for OCR assets');
@@ -1229,13 +1229,15 @@ test('JSON Backup export and restore preserves savings goals and records with ba
 });
 
 test('Savings Feature PWA UI integration: index.html, components.css, and app.js', () => {
-  if (typeof readFile !== 'function') {
-    return;
-  }
+  const getFileContent = (path) => {
+    if (typeof read === 'function') return read(path);
+    if (typeof require === 'function') return require('fs').readFileSync(path, 'utf8');
+    return '';
+  };
 
-  const html = readFile('index.html');
-  const css = readFile('css/components.css');
-  const app = readFile('js/app.js');
+  const html = getFileContent('index.html');
+  const css = getFileContent('css/components.css');
+  const app = getFileContent('js/app.js');
 
   // 1. HTML checks
   assert(html.includes('id="view-savings"'), 'index.html contains #view-savings view section');
@@ -1261,6 +1263,168 @@ test('Savings Feature PWA UI integration: index.html, components.css, and app.js
   assert(app.includes('addSavingsRecord'), 'app.js records savings deposits/withdrawals');
   assert(app.includes('renderSavingsGoals'), 'app.js renders savings goals');
   assert(app.includes('renderDashboardSavingsSnapshot'), 'app.js renders dashboard savings snapshot');
+});
+
+// ==========================================================================
+// 8. New Features Unit & Integration Tests (6 Enhancements)
+// ==========================================================================
+test('Numpad formats display with comma thousand and million separators', () => {
+  let displayed = '';
+  const numpad = new BudgetNumpad.NumpadController({
+    onAmountChange: (buf) => { displayed = buf; }
+  });
+
+  // Type 1,000
+  '1000'.split('').forEach(d => numpad.pressDigit(d));
+  assertEquals(displayed, '1,000', 'Should format 1000 as 1,000');
+  assertEquals(numpad.getNumericValue(), 1000, 'Numeric value should be 1000');
+
+  // Type 1,500,000
+  numpad.reset();
+  '1500000'.split('').forEach(d => numpad.pressDigit(d));
+  assertEquals(displayed, '1,500,000', 'Should format 1500000 as 1,500,000');
+  assertEquals(numpad.getNumericValue(), 1500000, 'Numeric value should be 1500000');
+
+  // Type 2,450.75
+  numpad.reset();
+  '2450'.split('').forEach(d => numpad.pressDigit(d));
+  numpad.pressDecimal();
+  assertEquals(displayed, '2,450.', 'Display should retain decimal point after comma-formatted number');
+  numpad.pressDigit('7');
+  numpad.pressDigit('5');
+  assertEquals(displayed, '2,450.75', 'Display should format integer with comma and preserve decimals');
+  assertEquals(numpad.getNumericValue(), 2450.75, 'Numeric value should be 2450.75');
+});
+
+test('BudgetStore category reordering and boundary clamping', () => {
+  BudgetStore.resetToDefaultData();
+  const initial = BudgetStore.getCategories();
+  const firstId = initial[0].id;
+  const secondId = initial[1].id;
+
+  // Move first category down
+  BudgetStore.moveCategory(firstId, 'down');
+  let reordered = BudgetStore.getCategories();
+  assertEquals(reordered[0].id, secondId, 'Second category should now be first');
+  assertEquals(reordered[1].id, firstId, 'First category should now be second');
+
+  // Move top category up (boundary clamp: should not move)
+  BudgetStore.moveCategory(secondId, 'up');
+  assertEquals(BudgetStore.getCategories()[0].id, secondId, 'Category at index 0 should clamp and remain at top');
+
+  // Move bottom category down (boundary clamp)
+  const lastId = reordered[reordered.length - 1].id;
+  BudgetStore.moveCategory(lastId, 'down');
+  assertEquals(BudgetStore.getCategories()[reordered.length - 1].id, lastId, 'Category at last index should clamp');
+
+  // Explicit array reorder
+  const reversedIds = reordered.map(c => c.id).reverse();
+  BudgetStore.saveCategoriesOrder(reversedIds);
+  const finalCategories = BudgetStore.getCategories();
+  assertEquals(finalCategories[0].id, reversedIds[0], 'Order should match custom ordered IDs');
+  assertEquals(finalCategories[finalCategories.length - 1].id, reversedIds[reversedIds.length - 1], 'Last category should match');
+});
+
+test('BudgetStore savings goals reordering and boundary clamping', () => {
+  // Clear any existing goals
+  const existing = BudgetStore.getSavingsGoals();
+  existing.forEach(g => BudgetStore.deleteSavingsGoal(g.id));
+
+  // Add 3 sample goals
+  const goalA = BudgetStore.saveSavingsGoal({ name: 'Trip to Tokyo', targetAmount: 200000, icon: '✈️', color: '#fed7aa' });
+  const goalB = BudgetStore.saveSavingsGoal({ name: 'Emergency Fund', targetAmount: 500000, icon: '🛡️', color: '#a7f3d0' });
+  const goalC = BudgetStore.saveSavingsGoal({ name: 'New Mac', targetAmount: 250000, icon: '💻', color: '#bae6fd' });
+
+  let goals = BudgetStore.getSavingsGoals();
+  assertEquals(goals.length, 3, 'Should have 3 goals');
+  assertEquals(goals[0].id, goalA.id, 'Goal A is first');
+
+  // Move Goal A down
+  BudgetStore.moveSavingsGoal(goalA.id, 'down');
+  goals = BudgetStore.getSavingsGoals();
+  assertEquals(goals[0].id, goalB.id, 'Goal B should now be first');
+  assertEquals(goals[1].id, goalA.id, 'Goal A should now be second');
+
+  // Move Goal C to top via custom order array
+  BudgetStore.saveSavingsGoalsOrder([goalC.id, goalB.id, goalA.id]);
+  goals = BudgetStore.getSavingsGoals();
+  assertEquals(goals[0].id, goalC.id, 'Goal C is now first');
+  assertEquals(goals[1].id, goalB.id, 'Goal B is now second');
+  assertEquals(goals[2].id, goalA.id, 'Goal A is now third');
+});
+
+test('Total limit calculation aggregates all category limits', () => {
+  BudgetStore.resetToDefaultData();
+  const categories = BudgetStore.getCategories();
+  const expectedTotal = categories.reduce((sum, c) => sum + (Number(c.limit) || 0), 0);
+  assert(expectedTotal > 0, 'Total budget limit should be greater than 0');
+
+  // Add a custom category and verify total increases accordingly
+  const newCat = BudgetStore.saveCategory({ name: 'Special Fund', limit: 25000, icon: '⭐' });
+  const updatedCategories = BudgetStore.getCategories();
+  const updatedTotal = updatedCategories.reduce((sum, c) => sum + (Number(c.limit) || 0), 0);
+  assertEquals(updatedTotal, expectedTotal + 25000, 'Aggregated limit should include new category');
+
+  // Clean up
+  BudgetStore.deleteCategory(newCat.id);
+});
+
+test('New Features UI Integration: index.html, components.css, and app.js wiring', () => {
+  const getFileContent = (path) => {
+    if (typeof read === 'function') return read(path);
+    if (typeof require === 'function') return require('fs').readFileSync(path, 'utf8');
+    return '';
+  };
+
+  const html = getFileContent('index.html');
+  const css = getFileContent('css/components.css');
+  const app = getFileContent('js/app.js');
+
+  // 1. Header Cleanup (Feature 4): "+ Add" button removed from top right
+  assert(!html.includes('id="btnHeaderAction"'), 'index.html no longer contains top-right btnHeaderAction');
+
+  // 2. Bottom Navigation Reordering (Feature 6): Settings, Limits, Savings, History, Dashboard
+  const settingsIdx = html.indexOf('data-tab="settings"');
+  const categoriesIdx = html.indexOf('data-tab="categories"');
+  const savingsIdx = html.indexOf('data-tab="savings"');
+  const historyIdx = html.indexOf('data-tab="history"');
+  const dashboardIdx = html.indexOf('data-tab="dashboard"');
+
+  assert(settingsIdx < categoriesIdx, 'Settings tab must come before Limits tab');
+  assert(categoriesIdx < savingsIdx, 'Limits tab must come before Savings tab');
+  assert(savingsIdx < historyIdx, 'Savings tab must come before History tab');
+  assert(historyIdx < dashboardIdx, 'History tab must come before Dashboard tab');
+
+  // 3. Limits Total Display (Feature 5)
+  assert(html.includes('id="limitsHeroCardContainer"'), 'index.html contains limitsHeroCardContainer');
+  assert(css.includes('.limits-hero-card'), 'components.css defines .limits-hero-card');
+  assert(app.includes('renderLimitsHeroCard'), 'app.js renders limits hero card');
+
+  // 4. Reordering Controls (Feature 2)
+  assert(html.includes('id="btnToggleReorderDashboardCategories"'), 'index.html has Dashboard Categories reorder button');
+  assert(html.includes('id="btnToggleReorderDashboardSavings"'), 'index.html has Dashboard Savings reorder button');
+  assert(html.includes('id="btnToggleReorderLimitsTab"'), 'index.html has Limits tab reorder button');
+  assert(html.includes('id="btnToggleReorderSavingsTab"'), 'index.html has Savings tab reorder button');
+  assert(css.includes('.reorder-toggle-btn'), 'components.css defines .reorder-toggle-btn');
+  assert(css.includes('.reorder-arrow-btn'), 'components.css defines .reorder-arrow-btn');
+  assert(app.includes('setupReorderingControls'), 'app.js sets up reordering controls');
+  assert(app.includes('moveCategory'), 'app.js invokes moveCategory');
+  assert(app.includes('moveSavingsGoal'), 'app.js invokes moveSavingsGoal');
+
+  // 5. WYSIWYG Color Selection & Live Preview (Feature 3)
+  assert(html.includes('id="categoryEditPreviewCard"'), 'index.html has live Category Preview card');
+  assert(html.includes('id="categoryColorSwatches"'), 'index.html has category curated color swatches');
+  assert(html.includes('id="goalEditPreviewCard"'), 'index.html has live Goal Preview card');
+  assert(html.includes('id="goalColorSwatches"'), 'index.html has goal curated color swatches');
+  assert(css.includes('.category-preview-card'), 'components.css defines .category-preview-card');
+  assert(css.includes('.color-swatch-btn'), 'components.css defines .color-swatch-btn');
+  assert(app.includes('updateCategoryLivePreview'), 'app.js defines updateCategoryLivePreview');
+  assert(app.includes('updateGoalLivePreview'), 'app.js defines updateGoalLivePreview');
+
+  // 6. Comma Input Formatting (Feature 1)
+  assert(app.includes('attachCurrencyInputFormatter'), 'app.js defines attachCurrencyInputFormatter');
+  assert(app.includes('formatNumberWithCommas'), 'app.js defines formatNumberWithCommas');
+  assert(app.includes('parseInputAmount'), 'app.js defines parseInputAmount');
 });
 
 log('\n-----------------------------------------');

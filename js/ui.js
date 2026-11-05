@@ -189,7 +189,7 @@
   /**
    * Renders Category Budget Cards with Live Consumption Bars (Focal Feature)
    */
-  function renderCategoryCards(monthKey, containerId = 'categoryCardsContainer', onCategoryTap = null) {
+  function renderCategoryCards(monthKey, containerId = 'categoryCardsContainer', onCategoryTap = null, reorderMode = false, onMoveCategory = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -207,7 +207,7 @@
       return;
     }
 
-    const cardsHtml = categories.map(cat => {
+    const cardsHtml = categories.map((cat, idx) => {
       const status = Calc().getCategoryBudgetStatus(cat, transactions, monthKey);
       const spentStr = Calc().formatCurrency(status.spent);
       const limitStr = Calc().formatCurrency(status.limit);
@@ -223,11 +223,19 @@
         remainingText = `<span class="category-remaining-text danger">+${remainingStr} over budget!</span>`;
       }
 
+      const reorderControls = reorderMode ? `
+        <div class="reorder-controls-col">
+          <button type="button" class="reorder-arrow-btn" data-move-cat-up="${cat.id}" ${idx === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+          <button type="button" class="reorder-arrow-btn" data-move-cat-down="${cat.id}" ${idx === categories.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+        </div>
+      ` : '';
+
       return `
-        <div class="category-budget-card" data-category-id="${cat.id}">
+        <div class="category-budget-card ${reorderMode ? 'reorder-mode-active' : ''}" data-category-id="${cat.id}">
           <div class="category-card-top">
             <div class="category-info-left">
-              <div class="category-icon-badge" style="background-color: ${cat.color || '#007AFF'}20; color: ${cat.color || '#007AFF'};">
+              ${reorderControls}
+              <div class="category-icon-badge" style="background-color: ${cat.color || '#fed7aa'};">
                 ${cat.icon || '🏷️'}
               </div>
               <div class="category-name-wrap">
@@ -256,8 +264,20 @@
 
     container.innerHTML = `<div class="categories-grid">${cardsHtml}</div>`;
 
-    // Attach click listeners to cards to quickly open add-modal for that category
-    if (typeof onCategoryTap === 'function') {
+    if (reorderMode && typeof onMoveCategory === 'function') {
+      container.querySelectorAll('[data-move-cat-up]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveCategory(btn.getAttribute('data-move-cat-up'), 'up');
+        });
+      });
+      container.querySelectorAll('[data-move-cat-down]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveCategory(btn.getAttribute('data-move-cat-down'), 'down');
+        });
+      });
+    } else if (typeof onCategoryTap === 'function') {
       container.querySelectorAll('.category-budget-card').forEach(card => {
         card.addEventListener('click', () => {
           const catId = card.getAttribute('data-category-id');
@@ -377,7 +397,7 @@
   /**
    * Renders Savings Goal Cards with live progress and action buttons
    */
-  function renderSavingsGoals(monthKey, containerId = 'savingsGoalsContainer', onDeposit = null, onWithdraw = null, onEdit = null, onDelete = null) {
+  function renderSavingsGoals(monthKey, containerId = 'savingsGoalsContainer', onDeposit = null, onWithdraw = null, onEdit = null, onDelete = null, reorderMode = false, onMoveGoal = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -395,7 +415,7 @@
       return;
     }
 
-    const cardsHtml = goals.map(goal => {
+    const cardsHtml = goals.map((goal, idx) => {
       const progress = Calc().getGoalProgress(goal, records);
       const savedStr = Calc().formatCurrency(progress.totalSaved);
       const targetStr = Calc().formatCurrency(progress.targetAmount);
@@ -423,11 +443,19 @@
         paceHtml = `<div class="goal-pace-badge completed">🎉 Target Reached!</div>`;
       }
 
+      const reorderControls = reorderMode ? `
+        <div class="reorder-controls-col">
+          <button type="button" class="reorder-arrow-btn" data-move-goal-up="${goal.id}" ${idx === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+          <button type="button" class="reorder-arrow-btn" data-move-goal-down="${goal.id}" ${idx === goals.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+        </div>
+      ` : '';
+
       return `
-        <div class="savings-goal-card" data-goal-id="${goal.id}">
+        <div class="savings-goal-card ${reorderMode ? 'reorder-mode-active' : ''}" data-goal-id="${goal.id}">
           <div class="goal-card-top">
             <div class="goal-info-left">
-              <div class="goal-icon-badge" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">
+              ${reorderControls}
+              <div class="goal-icon-badge" style="background-color: ${goal.color || '#bae6fd'};">
                 ${goal.icon || '🎯'}
               </div>
               <div class="goal-name-wrap">
@@ -437,7 +465,7 @@
                 </span>
               </div>
             </div>
-            <div class="goal-badge-percent" style="background-color: ${goal.color || '#007AFF'}18; color: ${goal.color || '#007AFF'};">
+            <div class="goal-badge-percent" style="background-color: ${goal.color || '#bae6fd'}; color: #1e293b;">
               ${progress.percent}%
             </div>
           </div>
@@ -464,6 +492,21 @@
     }).join('');
 
     container.innerHTML = `<div class="savings-goals-grid">${cardsHtml}</div>`;
+
+    if (reorderMode && typeof onMoveGoal === 'function') {
+      container.querySelectorAll('[data-move-goal-up]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-move-goal-up'), 'up');
+        });
+      });
+      container.querySelectorAll('[data-move-goal-down]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-move-goal-down'), 'down');
+        });
+      });
+    }
 
     if (typeof onDeposit === 'function') {
       container.querySelectorAll('[data-deposit-goal]').forEach(btn => {
@@ -505,7 +548,7 @@
   /**
    * Renders the Savings Goals snapshot on the Dashboard
    */
-  function renderDashboardSavingsSnapshot(monthKey, containerId = 'dashboardSavingsContainer', onDeposit = null, onViewAll = null) {
+  function renderDashboardSavingsSnapshot(monthKey, containerId = 'dashboardSavingsContainer', onDeposit = null, onViewAll = null, reorderMode = false, onMoveGoal = null) {
     const container = document.getElementById(containerId);
     const headerEl = document.getElementById('dashboardSavingsHeader');
     if (!container) return;
@@ -521,16 +564,24 @@
 
     if (headerEl) headerEl.style.display = 'flex';
 
-    const itemsHtml = goals.map(goal => {
+    const itemsHtml = goals.map((goal, idx) => {
       const progress = Calc().getGoalProgress(goal, records);
       const savedStr = Calc().formatCurrency(progress.totalSaved);
       const targetStr = Calc().formatCurrency(progress.targetAmount);
       const fillWidth = Math.min(progress.percent, 100);
 
+      const reorderControls = reorderMode ? `
+        <div class="reorder-controls-col" style="margin-right: 6px;">
+          <button type="button" class="reorder-arrow-btn" data-move-dash-goal-up="${goal.id}" ${idx === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+          <button type="button" class="reorder-arrow-btn" data-move-dash-goal-down="${goal.id}" ${idx === goals.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+        </div>
+      ` : '';
+
       return `
-        <div class="dashboard-savings-card" data-goal-id="${goal.id}">
+        <div class="dashboard-savings-card ${reorderMode ? 'reorder-mode-active' : ''}" data-goal-id="${goal.id}">
           <div class="dash-goal-top">
-            <span class="dash-goal-icon" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">${goal.icon || '🎯'}</span>
+            ${reorderControls}
+            <span class="dash-goal-icon" style="background-color: ${goal.color || '#bae6fd'};">${goal.icon || '🎯'}</span>
             <div class="dash-goal-title-wrap">
               <span class="dash-goal-name">${escapeHtml(goal.name)}</span>
               <span class="dash-goal-fraction">${savedStr} / ${targetStr}</span>
@@ -545,6 +596,21 @@
     }).join('');
 
     container.innerHTML = `<div class="dashboard-savings-grid">${itemsHtml}</div>`;
+
+    if (reorderMode && typeof onMoveGoal === 'function') {
+      container.querySelectorAll('[data-move-dash-goal-up]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-move-dash-goal-up'), 'up');
+        });
+      });
+      container.querySelectorAll('[data-move-dash-goal-down]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-move-dash-goal-down'), 'down');
+        });
+      });
+    }
 
     if (typeof onDeposit === 'function') {
       container.querySelectorAll('[data-dash-deposit]').forEach(btn => {
@@ -613,7 +679,7 @@
           return `
             <div class="transaction-row savings-record-row" data-savings-id="${t.id}">
               <div class="transaction-left">
-                <div class="transaction-icon" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">
+                <div class="transaction-icon" style="background-color: ${goal.color || '#bae6fd'};">
                   ${goal.icon || '🏦'}
                 </div>
                 <div class="transaction-details">
@@ -638,7 +704,7 @@
         return `
           <div class="transaction-row" data-transaction-id="${t.id}">
             <div class="transaction-left">
-              <div class="transaction-icon" style="background-color: ${cat.color}20; color: ${cat.color};">
+              <div class="transaction-icon" style="background-color: ${cat.color || '#fed7aa'};">
                 ${cat.icon}
               </div>
               <div class="transaction-details">
@@ -691,7 +757,7 @@
   /**
    * Renders Category Manager Screen (Set & Edit Monthly Budget Limits)
    */
-  function renderCategoriesManager(containerId = 'categoriesManagerContainer', onEdit = null, onDelete = null) {
+  function renderCategoriesManager(containerId = 'categoriesManagerContainer', onEdit = null, onDelete = null, reorderMode = false, onMoveCategory = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -707,12 +773,20 @@
         </div>
       `;
     } else {
-      const itemsHtml = categories.map(cat => {
+      const itemsHtml = categories.map((cat, idx) => {
         const limitFormatted = Calc().formatCurrency(cat.limit);
+        const reorderControls = reorderMode ? `
+          <div class="reorder-controls-col">
+            <button type="button" class="reorder-arrow-btn" data-move-limit-cat-up="${cat.id}" ${idx === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+            <button type="button" class="reorder-arrow-btn" data-move-limit-cat-down="${cat.id}" ${idx === categories.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+          </div>
+        ` : '';
+
         return `
-          <div class="category-manager-item" data-id="${cat.id}">
+          <div class="category-manager-item ${reorderMode ? 'reorder-mode-active' : ''}" data-id="${cat.id}">
             <div class="category-manager-left">
-              <div class="category-icon-badge" style="background-color: ${cat.color}20; color: ${cat.color};">
+              ${reorderControls}
+              <div class="category-icon-badge" style="background-color: ${cat.color || '#fed7aa'};">
                 ${cat.icon}
               </div>
               <div>
@@ -739,6 +813,21 @@
       <button class="add-category-btn" id="btnOpenAddCategoryModal" style="margin-top: 12px;">+ Add New Category</button>
     `;
 
+    if (reorderMode && typeof onMoveCategory === 'function') {
+      container.querySelectorAll('[data-move-limit-cat-up]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveCategory(btn.getAttribute('data-move-limit-cat-up'), 'up');
+        });
+      });
+      container.querySelectorAll('[data-move-limit-cat-down]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveCategory(btn.getAttribute('data-move-limit-cat-down'), 'down');
+        });
+      });
+    }
+
     if (typeof onEdit === 'function') {
       container.querySelectorAll('.category-manager-limit').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -757,6 +846,36 @@
         });
       });
     }
+  }
+
+  /**
+   * Renders Total Monthly Budget Limit Hero Card in Limits tab
+   */
+  function renderLimitsHeroCard(containerId = 'limitsHeroCardContainer') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const categories = Store().getCategories();
+    const totalLimit = categories.reduce((sum, cat) => sum + (Number(cat.limit) || 0), 0);
+    const totalLimitFormatted = Calc().formatCurrency(totalLimit);
+    const count = categories.length;
+    const avgLimit = count > 0 ? Math.round(totalLimit / count) : 0;
+    const avgLimitFormatted = Calc().formatCurrency(avgLimit);
+
+    container.innerHTML = `
+      <div class="limits-hero-card">
+        <div class="limits-hero-top">
+          <div>
+            <div class="limits-hero-label">Total Monthly Budget Limit</div>
+            <div class="limits-hero-amount">${totalLimitFormatted}</div>
+          </div>
+          <div class="limits-hero-badge">${count} ${count === 1 ? 'Category' : 'Categories'}</div>
+        </div>
+        <div class="limits-hero-sub">
+          Average monthly limit: <strong>${avgLimitFormatted}</strong> / category
+        </div>
+      </div>
+    `;
   }
 
   function escapeHtml(str) {
@@ -781,6 +900,7 @@
     renderDashboardSavingsSnapshot,
     renderHistory,
     renderCategoriesManager,
+    renderLimitsHeroCard,
     escapeHtml
   };
 });

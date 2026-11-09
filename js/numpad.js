@@ -16,6 +16,27 @@
 })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this, function () {
   'use strict';
 
+  /**
+   * Helper function to format numeric strings with comma thousands separators.
+   * Splits integer and decimal parts (handling negative if needed).
+   * Formats integer part using regex: parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',').
+   * Preserves trailing decimal point (e.g. '1,000.' if user just pressed '.') and decimal digits (e.g. '1,000.50').
+   */
+  function formatWithCommas(valStr) {
+    if (valStr === undefined || valStr === null || valStr === '') return '';
+    const str = String(valStr);
+    const isNegative = str.startsWith('-');
+    const cleanStr = isNegative ? str.slice(1) : str;
+    const parts = cleanStr.split('.');
+    const intPart = parts[0] || '0';
+    const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const sign = isNegative ? '-' : '';
+    if (parts.length > 1) {
+      return sign + formattedInt + '.' + parts.slice(1).join('');
+    }
+    return sign + formattedInt;
+  }
+
   class NumpadController {
     constructor(options = {}) {
       this.currentBuffer = '0';
@@ -92,16 +113,17 @@
     }
 
     getDisplayString() {
-      return this.currentBuffer;
+      return formatWithCommas(this.currentBuffer);
     }
 
     _notify() {
-      this.onAmountChange(this.currentBuffer, this.getNumericValue());
+      this.onAmountChange(this.getDisplayString(), this.getNumericValue(), this.currentBuffer);
     }
   }
 
   return {
-    NumpadController
+    NumpadController,
+    formatWithCommas
   };
 });
 

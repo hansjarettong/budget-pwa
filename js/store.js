@@ -47,16 +47,16 @@ const STORAGE_KEYS = {
  * 10 Pre-configured default budget categories with icons, colors, and initial monthly limits (in JPY).
  */
 const DEFAULT_CATEGORIES = [
-  { id: 'cat_dining', name: 'Dining', icon: '🍔', limit: 40000, color: '#f97316' },
-  { id: 'cat_groceries', name: 'Groceries', icon: '🛒', limit: 50000, color: '#10b981' },
-  { id: 'cat_transport', name: 'Transport', icon: '🚇', limit: 15000, color: '#06b6d4' },
-  { id: 'cat_bills', name: 'Bills & Utilities', icon: '⚡', limit: 30000, color: '#eab308' },
-  { id: 'cat_shopping', name: 'Shopping', icon: '🛍️', limit: 20000, color: '#ec4899' },
-  { id: 'cat_entertainment', name: 'Entertainment', icon: '🎬', limit: 15000, color: '#8b5cf6' },
-  { id: 'cat_health', name: 'Health & Wellness', icon: '💊', limit: 10000, color: '#ef4444' },
-  { id: 'cat_personal', name: 'Personal Care', icon: '💈', limit: 10000, color: '#3b82f6' },
-  { id: 'cat_education', name: 'Education', icon: '📚', limit: 10000, color: '#14b8a6' },
-  { id: 'cat_misc', name: 'Miscellaneous', icon: '📦', limit: 10000, color: '#64748b' }
+  { id: 'cat_dining', name: 'Dining', icon: '🍔', limit: 40000, color: '#fed7aa' },
+  { id: 'cat_groceries', name: 'Groceries', icon: '🛒', limit: 50000, color: '#a7f3d0' },
+  { id: 'cat_transport', name: 'Transport', icon: '🚇', limit: 15000, color: '#bae6fd' },
+  { id: 'cat_bills', name: 'Bills & Utilities', icon: '⚡', limit: 30000, color: '#fef08a' },
+  { id: 'cat_shopping', name: 'Shopping', icon: '🛍️', limit: 20000, color: '#fbcfe8' },
+  { id: 'cat_entertainment', name: 'Entertainment', icon: '🎬', limit: 15000, color: '#ddd6fe' },
+  { id: 'cat_health', name: 'Health & Wellness', icon: '💊', limit: 10000, color: '#fecaca' },
+  { id: 'cat_personal', name: 'Personal Care', icon: '💈', limit: 10000, color: '#bfdbfe' },
+  { id: 'cat_education', name: 'Education', icon: '📚', limit: 10000, color: '#99f6e4' },
+  { id: 'cat_misc', name: 'Miscellaneous', icon: '📦', limit: 10000, color: '#e2e8f0' }
 ];
 
 /**
@@ -124,6 +124,35 @@ function getCategories() {
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
+      const LEGACY_COLOR_MAP = {
+        '#f97316': '#fed7aa',
+        '#10b981': '#a7f3d0',
+        '#06b6d4': '#bae6fd',
+        '#eab308': '#fef08a',
+        '#ec4899': '#fbcfe8',
+        '#8b5cf6': '#ddd6fe',
+        '#ef4444': '#fecaca',
+        '#3b82f6': '#bfdbfe',
+        '#14b8a6': '#99f6e4',
+        '#64748b': '#e2e8f0'
+      };
+
+      let migrated = false;
+      for (let i = 0; i < parsed.length; i++) {
+        const cat = parsed[i];
+        if (cat && typeof cat.color === 'string') {
+          const colorLower = cat.color.toLowerCase();
+          if (LEGACY_COLOR_MAP[colorLower]) {
+            cat.color = LEGACY_COLOR_MAP[colorLower];
+            migrated = true;
+          }
+        }
+      }
+
+      if (migrated) {
+        storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(parsed));
+      }
+
       return parsed;
     }
   } catch (e) {
@@ -189,6 +218,57 @@ function deleteCategory(categoryId) {
   const storage = getStorage();
   storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
   return true;
+}
+
+/**
+ * Saves a new ordering of categories by array of IDs.
+ * Unlisted categories are appended to the end in their original relative order.
+ * @param {Array<string>} orderedIds
+ * @returns {Array<Object>} Updated categories array
+ */
+function saveCategoriesOrder(orderedIds) {
+  if (!Array.isArray(orderedIds)) return getCategories();
+  const categories = getCategories();
+  const idMap = new Map();
+  categories.forEach(c => idMap.set(c.id, c));
+  const newOrder = [];
+  for (const id of orderedIds) {
+    if (idMap.has(id)) {
+      newOrder.push(idMap.get(id));
+      idMap.delete(id);
+    }
+  }
+  for (const remaining of idMap.values()) {
+    newOrder.push(remaining);
+  }
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(newOrder));
+  return newOrder;
+}
+
+/**
+ * Moves a category up or down by 1 position with boundary clamping.
+ * @param {string} categoryId
+ * @param {'up'|'down'} direction
+ * @returns {Array<Object>} Updated categories array
+ */
+function moveCategory(categoryId, direction) {
+  if (!categoryId) return getCategories();
+  const categories = getCategories();
+  const index = categories.findIndex(c => c.id === categoryId);
+  if (index === -1) return categories;
+
+  const targetIndex = direction === 'up' ? index - 1 : direction === 'down' ? index + 1 : index;
+  if (targetIndex < 0 || targetIndex >= categories.length || targetIndex === index) {
+    return categories;
+  }
+
+  const [item] = categories.splice(index, 1);
+  categories.splice(targetIndex, 0, item);
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+  return categories;
 }
 
 /**
@@ -397,6 +477,57 @@ function deleteSavingsGoal(goalId) {
   storage.setItem(STORAGE_KEYS.SAVINGS_RECORDS, JSON.stringify(filteredRecords));
 
   return true;
+}
+
+/**
+ * Saves a new ordering of savings goals by array of IDs.
+ * Unlisted goals are appended to the end in their original relative order.
+ * @param {Array<string>} orderedIds
+ * @returns {Array<Object>} Updated savings goals array
+ */
+function saveSavingsGoalsOrder(orderedIds) {
+  if (!Array.isArray(orderedIds)) return getSavingsGoals();
+  const goals = getSavingsGoals();
+  const idMap = new Map();
+  goals.forEach(g => idMap.set(g.id, g));
+  const newOrder = [];
+  for (const id of orderedIds) {
+    if (idMap.has(id)) {
+      newOrder.push(idMap.get(id));
+      idMap.delete(id);
+    }
+  }
+  for (const remaining of idMap.values()) {
+    newOrder.push(remaining);
+  }
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(newOrder));
+  return newOrder;
+}
+
+/**
+ * Moves a savings goal up or down by 1 position with boundary clamping.
+ * @param {string} goalId
+ * @param {'up'|'down'} direction
+ * @returns {Array<Object>} Updated savings goals array
+ */
+function moveSavingsGoal(goalId, direction) {
+  if (!goalId) return getSavingsGoals();
+  const goals = getSavingsGoals();
+  const index = goals.findIndex(g => g.id === goalId);
+  if (index === -1) return goals;
+
+  const targetIndex = direction === 'up' ? index - 1 : direction === 'down' ? index + 1 : index;
+  if (targetIndex < 0 || targetIndex >= goals.length || targetIndex === index) {
+    return goals;
+  }
+
+  const [item] = goals.splice(index, 1);
+  goals.splice(targetIndex, 0, item);
+
+  const storage = getStorage();
+  storage.setItem(STORAGE_KEYS.SAVINGS_GOALS, JSON.stringify(goals));
+  return goals;
 }
 
 /**
@@ -815,6 +946,8 @@ const BudgetStore = {
   getCategoryById,
   saveCategory,
   deleteCategory,
+  saveCategoriesOrder,
+  moveCategory,
   getTransactions,
   addTransaction,
   updateTransaction,
@@ -824,6 +957,8 @@ const BudgetStore = {
   getSavingsGoalById,
   saveSavingsGoal,
   deleteSavingsGoal,
+  saveSavingsGoalsOrder,
+  moveSavingsGoal,
   getSavingsRecords,
   addSavingsRecord,
   deleteSavingsRecord,

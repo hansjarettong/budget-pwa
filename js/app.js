@@ -19,6 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let editingGoalId = null;
   let withdrawingGoalId = null;
 
+  // Reordering State
+  let isReorderingDashboardCategories = false;
+  let isReorderingDashboardSavings = false;
+  let isReorderingLimitsCategories = false;
+  let isReorderingTabSavings = false;
+
   // 2. Initialize Numpad Controller
   const amountDisplayEl = document.getElementById('numpadAmountDisplay');
   const numpad = new window.BudgetNumpad.NumpadController({
@@ -55,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSavingsWithdrawModal();
     setupPassphraseModal();
     setupSettingsActions();
+    setupReorderingControls();
     initStoragePersistence();
     updateCurrencyDisplay();
     renderCurrentView();
@@ -67,9 +74,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeTab === 'dashboard') {
       window.BudgetUI.renderMonthSelector(currentMonthKey, 'monthSelectorContainer');
       window.BudgetUI.renderSummaryCard(currentMonthKey, 'summaryCardContainer');
-      window.BudgetUI.renderCategoryCards(currentMonthKey, 'categoryCardsContainer', (catId) => {
-        openQuickAddModal(catId, null, 'expense');
-      });
+      window.BudgetUI.renderCategoryCards(
+        currentMonthKey,
+        'categoryCardsContainer',
+        (catId) => {
+          openQuickAddModal(catId, null, 'expense');
+        },
+        isReorderingDashboardCategories,
+        (catId, direction) => {
+          window.BudgetStore.moveCategory(catId, direction);
+          renderCurrentView();
+        }
+      );
       window.BudgetUI.renderDashboardSavingsSnapshot(
         currentMonthKey,
         'dashboardSavingsContainer',
@@ -78,6 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         () => {
           switchTab('savings');
+        },
+        isReorderingDashboardSavings,
+        (goalId, direction) => {
+          window.BudgetStore.moveSavingsGoal(goalId, direction);
+          renderCurrentView();
         }
       );
     } else if (activeTab === 'savings') {
@@ -97,6 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         (goalId) => {
           handleDeleteSavingsGoal(goalId);
+        },
+        isReorderingTabSavings,
+        (goalId, direction) => {
+          window.BudgetStore.moveSavingsGoal(goalId, direction);
+          renderCurrentView();
         }
       );
     } else if (activeTab === 'history') {
@@ -120,15 +146,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       );
     } else if (activeTab === 'categories') {
-      window.BudgetUI.renderCategoriesManager('categoriesManagerContainer', (catId) => {
-        openCategoryEditModal(catId);
-      }, (catId) => {
-        handleDeleteCategory(catId);
-      });
+      window.BudgetUI.renderLimitsHeroCard('limitsHeroCardContainer');
+      window.BudgetUI.renderCategoriesManager(
+        'categoriesManagerContainer',
+        (catId) => {
+          openCategoryEditModal(catId);
+        },
+        (catId) => {
+          handleDeleteCategory(catId);
+        },
+        isReorderingLimitsCategories,
+        (catId, direction) => {
+          window.BudgetStore.moveCategory(catId, direction);
+          renderCurrentView();
+        }
+      );
+    }
+  }
+
+  function resetReorderStates() {
+    isReorderingDashboardCategories = false;
+    isReorderingDashboardSavings = false;
+    isReorderingLimitsCategories = false;
+    isReorderingTabSavings = false;
+
+    const btnDashCat = document.getElementById('btnToggleReorderDashboardCategories');
+    if (btnDashCat) {
+      btnDashCat.classList.remove('active');
+      btnDashCat.textContent = '↕ Reorder';
+    }
+    const btnDashSavings = document.getElementById('btnToggleReorderDashboardSavings');
+    if (btnDashSavings) {
+      btnDashSavings.classList.remove('active');
+      btnDashSavings.textContent = '↕ Reorder';
+    }
+    const btnLimitsCat = document.getElementById('btnToggleReorderLimitsTab');
+    if (btnLimitsCat) {
+      btnLimitsCat.classList.remove('active');
+      btnLimitsCat.textContent = '↕ Reorder';
+    }
+    const btnSavingsTab = document.getElementById('btnToggleReorderSavingsTab');
+    if (btnSavingsTab) {
+      btnSavingsTab.classList.remove('active');
+      btnSavingsTab.textContent = '↕ Reorder';
     }
   }
 
   function switchTab(targetTab) {
+    resetReorderStates();
     const tabButtons = document.querySelectorAll('.tab-item');
     tabButtons.forEach(btn => {
       if (btn.getAttribute('data-tab') === targetTab) {
@@ -186,23 +251,54 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('click', () => {
         const targetTab = btn.getAttribute('data-tab');
         if (targetTab === activeTab) return;
-
-        tabButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        document.querySelectorAll('.view-section').forEach(view => {
-          view.classList.remove('active');
-        });
-
-        const activeSection = document.getElementById(`view-${targetTab}`);
-        if (activeSection) {
-          activeSection.classList.add('active');
-        }
-
-        activeTab = targetTab;
-        renderCurrentView();
+        switchTab(targetTab);
       });
     });
+  }
+
+  // ==========================================================================
+  // Category & Savings Reordering Controls (Feature 2)
+  // ==========================================================================
+  function setupReorderingControls() {
+    const btnDashCat = document.getElementById('btnToggleReorderDashboardCategories');
+    if (btnDashCat) {
+      btnDashCat.addEventListener('click', () => {
+        isReorderingDashboardCategories = !isReorderingDashboardCategories;
+        btnDashCat.classList.toggle('active', isReorderingDashboardCategories);
+        btnDashCat.textContent = isReorderingDashboardCategories ? '✓ Done' : '↕ Reorder';
+        renderCurrentView();
+      });
+    }
+
+    const btnDashSavings = document.getElementById('btnToggleReorderDashboardSavings');
+    if (btnDashSavings) {
+      btnDashSavings.addEventListener('click', () => {
+        isReorderingDashboardSavings = !isReorderingDashboardSavings;
+        btnDashSavings.classList.toggle('active', isReorderingDashboardSavings);
+        btnDashSavings.textContent = isReorderingDashboardSavings ? '✓ Done' : '↕ Reorder';
+        renderCurrentView();
+      });
+    }
+
+    const btnLimitsCat = document.getElementById('btnToggleReorderLimitsTab');
+    if (btnLimitsCat) {
+      btnLimitsCat.addEventListener('click', () => {
+        isReorderingLimitsCategories = !isReorderingLimitsCategories;
+        btnLimitsCat.classList.toggle('active', isReorderingLimitsCategories);
+        btnLimitsCat.textContent = isReorderingLimitsCategories ? '✓ Done' : '↕ Reorder';
+        renderCurrentView();
+      });
+    }
+
+    const btnSavingsTab = document.getElementById('btnToggleReorderSavingsTab');
+    if (btnSavingsTab) {
+      btnSavingsTab.addEventListener('click', () => {
+        isReorderingTabSavings = !isReorderingTabSavings;
+        btnSavingsTab.classList.toggle('active', isReorderingTabSavings);
+        btnSavingsTab.textContent = isReorderingTabSavings ? '✓ Done' : '↕ Reorder';
+        renderCurrentView();
+      });
+    }
   }
 
   // ==========================================================================
@@ -475,6 +571,37 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    // Desktop keyboard support for Quick Add (digits 0-9, '.', Backspace, Escape, Enter)
+    window.addEventListener('keydown', (e) => {
+      const quickAddOverlay = document.getElementById('quickAddModal');
+      if (!quickAddOverlay || !quickAddOverlay.classList.contains('open')) return;
+
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      if (activeTag === 'input' || activeTag === 'textarea') {
+        if (e.key === 'Escape') {
+          closeQuickAddModal();
+        }
+        return;
+      }
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        numpad.pressDigit(e.key);
+      } else if (e.key === '.' || e.key === ',') {
+        e.preventDefault();
+        numpad.pressDecimal();
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        numpad.pressBackspace();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeQuickAddModal();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (saveBtn) saveBtn.click();
+      }
+    });
+
     // Mode Toggle: Expense vs Savings
     const btnTypeExpense = document.getElementById('btnTypeExpense');
     const btnTypeSavings = document.getElementById('btnTypeSavings');
@@ -632,13 +759,196 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
+  // Currency Input Formatting & Parsing Helpers
+  // ==========================================================================
+
+  /**
+   * Strips thousands comma separators and parses a numeric amount.
+   */
+  function parseInputAmount(str) {
+    if (typeof str === 'number') return isNaN(str) ? 0 : str;
+    if (!str) return 0;
+    const cleaned = String(str).replace(/,/g, '').trim();
+    const val = parseFloat(cleaned);
+    return isNaN(val) ? 0 : val;
+  }
+
+  /**
+   * Helper function to format input fields with commas as the user types,
+   * preserving cursor position and handling backspace/delete on commas.
+   */
+  function attachCurrencyInputFormatter(input) {
+    if (!input) return;
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        const pos = input.selectionStart;
+        if (pos === input.selectionEnd && pos > 0 && input.value[pos - 1] === ',') {
+          // Deleting comma with Backspace: delete the digit before the comma instead
+          e.preventDefault();
+          const val = input.value;
+          input.value = val.slice(0, pos - 2) + val.slice(pos - 1);
+          input.setSelectionRange(pos - 1, pos - 1);
+          input.dispatchEvent(new Event('input'));
+        }
+      } else if (e.key === 'Delete') {
+        const pos = input.selectionStart;
+        if (pos === input.selectionEnd && pos < input.value.length && input.value[pos] === ',') {
+          // Deleting comma with Delete: delete comma and the digit after it
+          e.preventDefault();
+          const val = input.value;
+          input.value = val.slice(0, pos) + val.slice(pos + 2);
+          input.setSelectionRange(pos, pos);
+          input.dispatchEvent(new Event('input'));
+        }
+      }
+    });
+
+    input.addEventListener('input', () => {
+      const originalValue = input.value;
+      const selectionStart = input.selectionStart;
+
+      // Count non-comma characters before the caret
+      const nonCommasBeforeCaret = (originalValue.slice(0, selectionStart).match(/[^,]/g) || []).length;
+
+      // Strip everything except digits and decimal point
+      let cleaned = originalValue.replace(/[^0-9.]/g, '');
+
+      // Keep only first decimal point
+      const firstDot = cleaned.indexOf('.');
+      if (firstDot !== -1) {
+        cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+      }
+
+      // Strip redundant leading zeros (e.g. "05" -> "5", but keep "0" or "0.")
+      if (/^0[0-9]/.test(cleaned)) {
+        cleaned = cleaned.replace(/^0+/, '');
+        if (cleaned === '') cleaned = '0';
+      }
+
+      if (cleaned === '') {
+        input.value = '';
+        return;
+      }
+
+      const formatter = (window.BudgetNumpad && window.BudgetNumpad.formatWithCommas) ||
+                        (typeof formatWithCommas === 'function' ? formatWithCommas : null);
+      const formatted = formatter ? formatter(cleaned) : cleaned;
+      input.value = formatted;
+
+      // Restore caret position based on nonCommasBeforeCaret
+      let newCaretPos = 0;
+      let count = 0;
+      for (let i = 0; i < formatted.length; i++) {
+        if (formatted[i] !== ',') {
+          count++;
+        }
+        if (count === nonCommasBeforeCaret) {
+          newCaretPos = i + 1;
+          break;
+        }
+      }
+
+      if (nonCommasBeforeCaret === 0) {
+        newCaretPos = 0;
+      } else if (count < nonCommasBeforeCaret) {
+        newCaretPos = formatted.length;
+      }
+
+      input.setSelectionRange(newCaretPos, newCaretPos);
+    });
+  }
+
+  // ==========================================================================
   // Category Budget Limits Management
   // ==========================================================================
+  function setSelectedSwatch(containerId, color) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const target = (color || '').toLowerCase();
+    container.querySelectorAll('.color-swatch-btn').forEach(btn => {
+      const btnColor = (btn.getAttribute('data-color') || '').toLowerCase();
+      if (btnColor === target) {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.remove('selected');
+      }
+    });
+  }
+
+  function updateCategoryLivePreview() {
+    const badge = document.getElementById('categoryEditPreviewBadge');
+    const nameEl = document.getElementById('categoryEditPreviewName');
+    const subEl = document.getElementById('categoryEditPreviewSub');
+    const nameInput = document.getElementById('editCategoryName');
+    const iconInput = document.getElementById('editCategoryIcon');
+    const limitInput = document.getElementById('editCategoryLimit');
+    const colorInput = document.getElementById('editCategoryColor');
+
+    const color = (colorInput && colorInput.value) || '#fed7aa';
+    const icon = (iconInput && iconInput.value.trim()) || '🏷️';
+    const name = (nameInput && nameInput.value.trim()) || 'Category Name';
+
+    if (badge) {
+      badge.style.backgroundColor = color;
+      badge.textContent = icon;
+    }
+    if (nameEl) {
+      nameEl.textContent = name;
+    }
+    if (subEl) {
+      const limitVal = limitInput ? parseInputAmount(limitInput.value) : 0;
+      if (limitVal > 0) {
+        const formatted = (window.BudgetCalculations && window.BudgetCalculations.formatCurrency)
+          ? window.BudgetCalculations.formatCurrency(limitVal)
+          : `¥${limitVal}`;
+        subEl.textContent = `${formatted} monthly limit`;
+      } else {
+        subEl.textContent = 'No budget limit';
+      }
+    }
+  }
+
   function setupCategoryEditModal() {
     const overlay = document.getElementById('categoryEditModal');
     const closeBtn = document.getElementById('btnCategoryEditClose');
     const saveBtn = document.getElementById('btnSaveCategory');
     const deleteBtn = document.getElementById('btnDeleteCategory');
+    const nameInput = document.getElementById('editCategoryName');
+    const iconInput = document.getElementById('editCategoryIcon');
+    const limitInput = document.getElementById('editCategoryLimit');
+    const colorInput = document.getElementById('editCategoryColor');
+    const swatchesContainer = document.getElementById('categoryColorSwatches');
+
+    if (limitInput) {
+      attachCurrencyInputFormatter(limitInput);
+    }
+
+    [nameInput, iconInput, limitInput].forEach(input => {
+      if (input) {
+        input.addEventListener('input', updateCategoryLivePreview);
+      }
+    });
+
+    if (colorInput) {
+      colorInput.addEventListener('input', () => {
+        setSelectedSwatch('categoryColorSwatches', colorInput.value);
+        updateCategoryLivePreview();
+      });
+    }
+
+    if (swatchesContainer) {
+      swatchesContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('.color-swatch-btn');
+        if (!btn) return;
+        const color = btn.getAttribute('data-color');
+        if (color) {
+          if (colorInput) colorInput.value = color;
+          setSelectedSwatch('categoryColorSwatches', color);
+          updateCategoryLivePreview();
+        }
+      });
+    }
 
     if (closeBtn) closeBtn.addEventListener('click', closeCategoryEditModal);
     if (overlay) {
@@ -672,15 +982,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (saveBtn) {
       saveBtn.addEventListener('click', () => {
-        const nameInput = document.getElementById('editCategoryName');
-        const iconInput = document.getElementById('editCategoryIcon');
-        const limitInput = document.getElementById('editCategoryLimit');
-        const colorInput = document.getElementById('editCategoryColor');
-
         const name = (nameInput.value || '').trim();
         const icon = (iconInput.value || '🏷️').trim();
-        const limit = parseFloat(limitInput.value) || 0;
-        const color = colorInput.value || '#007AFF';
+        const limit = parseInputAmount(limitInput.value);
+        const color = colorInput.value || '#fed7aa';
 
         if (!name) {
           window.BudgetUI.showToast('Please enter a category name');
@@ -733,16 +1038,24 @@ document.addEventListener('DOMContentLoaded', () => {
         titleEl.textContent = 'Edit Category Budget Limit';
         nameInput.value = cat.name;
         iconInput.value = cat.icon || '🏷️';
-        limitInput.value = cat.limit;
-        colorInput.value = cat.color || '#007AFF';
+        const formatter = (window.BudgetNumpad && window.BudgetNumpad.formatWithCommas) ||
+                          (typeof formatWithCommas === 'function' ? formatWithCommas : null);
+        limitInput.value = formatter ? formatter(cat.limit) : cat.limit;
+        colorInput.value = cat.color || '#fed7aa';
       }
     } else {
       titleEl.textContent = 'Add New Category & Budget';
       nameInput.value = '';
       iconInput.value = '🏷️';
-      limitInput.value = '200';
-      colorInput.value = '#007AFF';
+      const defaultLimit = window.BudgetStore.getCurrency() === 'JPY' ? 50000 : 200;
+      const formatter = (window.BudgetNumpad && window.BudgetNumpad.formatWithCommas) ||
+                        (typeof formatWithCommas === 'function' ? formatWithCommas : null);
+      limitInput.value = formatter ? formatter(defaultLimit) : String(defaultLimit);
+      colorInput.value = '#fed7aa';
     }
+
+    setSelectedSwatch('categoryColorSwatches', colorInput.value);
+    updateCategoryLivePreview();
 
     if (overlay) overlay.classList.add('open');
   }
@@ -755,11 +1068,80 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================================================
   // Savings Goals Management & Withdrawals
   // ==========================================================================
+  function updateGoalLivePreview() {
+    const badge = document.getElementById('goalEditPreviewBadge');
+    const nameEl = document.getElementById('goalEditPreviewName');
+    const subEl = document.getElementById('goalEditPreviewSub');
+    const nameInput = document.getElementById('goalInputName');
+    const iconInput = document.getElementById('goalInputIcon');
+    const targetInput = document.getElementById('goalInputTarget');
+    const colorInput = document.getElementById('goalInputColor');
+
+    const color = (colorInput && colorInput.value) || '#bae6fd';
+    const icon = (iconInput && iconInput.value.trim()) || '🎯';
+    const name = (nameInput && nameInput.value.trim()) || 'Goal Name';
+
+    if (badge) {
+      badge.style.backgroundColor = color;
+      badge.textContent = icon;
+    }
+    if (nameEl) {
+      nameEl.textContent = name;
+    }
+    if (subEl) {
+      const targetVal = targetInput ? parseInputAmount(targetInput.value) : 0;
+      if (targetVal > 0) {
+        const formatted = (window.BudgetCalculations && window.BudgetCalculations.formatCurrency)
+          ? window.BudgetCalculations.formatCurrency(targetVal)
+          : `¥${targetVal}`;
+        subEl.textContent = `Target: ${formatted}`;
+      } else {
+        subEl.textContent = 'No target amount';
+      }
+    }
+  }
+
   function setupSavingsGoalModal() {
     const overlay = document.getElementById('savingsGoalModal');
     const closeBtn = document.getElementById('btnSavingsGoalClose');
     const saveBtn = document.getElementById('btnSaveSavingsGoal');
     const deleteBtn = document.getElementById('btnDeleteSavingsGoal');
+    const nameInput = document.getElementById('goalInputName');
+    const iconInput = document.getElementById('goalInputIcon');
+    const targetInput = document.getElementById('goalInputTarget');
+    const dateInput = document.getElementById('goalInputTargetDate');
+    const colorInput = document.getElementById('goalInputColor');
+    const swatchesContainer = document.getElementById('goalColorSwatches');
+
+    if (targetInput) {
+      attachCurrencyInputFormatter(targetInput);
+    }
+
+    [nameInput, iconInput, targetInput].forEach(input => {
+      if (input) {
+        input.addEventListener('input', updateGoalLivePreview);
+      }
+    });
+
+    if (colorInput) {
+      colorInput.addEventListener('input', () => {
+        setSelectedSwatch('goalColorSwatches', colorInput.value);
+        updateGoalLivePreview();
+      });
+    }
+
+    if (swatchesContainer) {
+      swatchesContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('.color-swatch-btn');
+        if (!btn) return;
+        const color = btn.getAttribute('data-color');
+        if (color) {
+          if (colorInput) colorInput.value = color;
+          setSelectedSwatch('goalColorSwatches', color);
+          updateGoalLivePreview();
+        }
+      });
+    }
 
     if (closeBtn) closeBtn.addEventListener('click', closeSavingsGoalModal);
     if (overlay) {
@@ -784,17 +1166,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (saveBtn) {
       saveBtn.addEventListener('click', () => {
-        const nameInput = document.getElementById('goalInputName');
-        const iconInput = document.getElementById('goalInputIcon');
-        const targetInput = document.getElementById('goalInputTarget');
-        const dateInput = document.getElementById('goalInputTargetDate');
-        const colorInput = document.getElementById('goalInputColor');
-
         const name = (nameInput.value || '').trim();
         const icon = (iconInput.value || '🎯').trim();
-        const targetAmount = parseFloat(targetInput.value) || 0;
+        const targetAmount = parseInputAmount(targetInput.value);
         const targetDate = dateInput.value || null;
-        const color = colorInput.value || '#007AFF';
+        const color = colorInput.value || '#bae6fd';
 
         if (!name) {
           window.BudgetUI.showToast('Please enter a goal name');
@@ -849,9 +1225,11 @@ document.addEventListener('DOMContentLoaded', () => {
         titleEl.textContent = 'Edit Savings Goal';
         nameInput.value = goal.name;
         iconInput.value = goal.icon || '🎯';
-        targetInput.value = goal.targetAmount;
+        const formatter = (window.BudgetNumpad && window.BudgetNumpad.formatWithCommas) ||
+                          (typeof formatWithCommas === 'function' ? formatWithCommas : null);
+        targetInput.value = formatter ? formatter(goal.targetAmount) : goal.targetAmount;
         dateInput.value = goal.targetDate || '';
-        colorInput.value = goal.color || '#007AFF';
+        colorInput.value = goal.color || '#bae6fd';
       }
     } else {
       titleEl.textContent = 'Create Savings Goal';
@@ -859,8 +1237,11 @@ document.addEventListener('DOMContentLoaded', () => {
       iconInput.value = '🎯';
       targetInput.value = '';
       dateInput.value = '';
-      colorInput.value = '#007AFF';
+      colorInput.value = '#bae6fd';
     }
+
+    setSelectedSwatch('goalColorSwatches', colorInput.value);
+    updateGoalLivePreview();
 
     if (overlay) overlay.classList.add('open');
   }
@@ -878,6 +1259,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateInput = document.getElementById('inputWithdrawDate');
     const noteInput = document.getElementById('inputWithdrawNote');
 
+    if (amountInput) {
+      attachCurrencyInputFormatter(amountInput);
+    }
+
     if (closeBtn) closeBtn.addEventListener('click', closeSavingsWithdrawModal);
     if (overlay) {
       overlay.addEventListener('click', (e) => {
@@ -889,7 +1274,7 @@ document.addEventListener('DOMContentLoaded', () => {
       submitBtn.addEventListener('click', () => {
         if (!withdrawingGoalId) return;
 
-        const amount = parseFloat(amountInput.value) || 0;
+        const amount = parseInputAmount(amountInput.value);
         if (amount <= 0) {
           window.BudgetUI.showToast('Please enter a valid withdrawal amount');
           return;

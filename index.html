@@ -36,8 +36,6 @@
     <!-- Top iOS Navigation Bar -->
     <header class="app-header">
       <h1 class="app-title">Budget Tracker</h1>
-      <button class="header-action-btn" id="btnHeaderAction" onclick="document.getElementById('fabQuickAdd').click()">+
-        Add</button>
     </header>
 
     <!-- Main Views Container -->
@@ -56,8 +54,7 @@
             <h2 class="section-title">Category Budgets</h2>
             <p class="section-subtitle">Real-time monthly consumption</p>
           </div>
-          <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Tap
-            to log</span>
+          <button type="button" class="reorder-toggle-btn" id="btnToggleReorderDashboardCategories" aria-label="Reorder Categories">↕ Reorder</button>
         </div>
         <div id="categoryCardsContainer"></div>
 
@@ -67,8 +64,11 @@
             <h2 class="section-title">Savings Goals</h2>
             <p class="section-subtitle">Multi-month funds & goal progress</p>
           </div>
-          <button type="button" class="section-action-link" id="btnDashboardViewAllSavings"
-            style="background: none; border: none; font-size: 13px; font-weight: 600; color: var(--accent-blue); cursor: pointer;">View All ›</button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="reorder-toggle-btn" id="btnToggleReorderDashboardSavings" aria-label="Reorder Savings Goals">↕ Reorder</button>
+            <button type="button" class="section-action-link" id="btnDashboardViewAllSavings"
+              style="background: none; border: none; font-size: 13px; font-weight: 600; color: var(--accent-blue); cursor: pointer;">View All ›</button>
+          </div>
         </div>
         <div id="dashboardSavingsContainer"></div>
       </section>
@@ -82,6 +82,7 @@
             <h2 class="section-title">Savings Goals</h2>
             <p class="section-subtitle">Set aside money for trips, funds & purchases</p>
           </div>
+          <button type="button" class="reorder-toggle-btn" id="btnToggleReorderSavingsTab" aria-label="Reorder Savings Goals">↕ Reorder</button>
         </div>
 
         <!-- Savings Overview Hero Card -->
@@ -110,7 +111,9 @@
             <h2 class="section-title">Category Limits</h2>
             <p class="section-subtitle">Set monthly limits once, track effortlessly</p>
           </div>
+          <button type="button" class="reorder-toggle-btn" id="btnToggleReorderLimitsTab" aria-label="Reorder Category Limits">↕ Reorder</button>
         </div>
+        <div id="limitsHeroCardContainer"></div>
         <div id="categoriesManagerContainer"></div>
       </section>
 
@@ -304,13 +307,13 @@
         <span class="tab-icon">📊</span>
         <span class="tab-label">Dashboard</span>
       </button>
-      <button class="tab-item" data-tab="savings">
-        <span class="tab-icon">🏦</span>
-        <span class="tab-label">Savings</span>
-      </button>
       <button class="tab-item" data-tab="history">
         <span class="tab-icon">📝</span>
         <span class="tab-label">History</span>
+      </button>
+      <button class="tab-item" data-tab="savings">
+        <span class="tab-icon">🏦</span>
+        <span class="tab-label">Savings</span>
       </button>
       <button class="tab-item" data-tab="categories">
         <span class="tab-icon">🏷️</span>
@@ -406,6 +409,14 @@
           <button class="sheet-close-btn" id="btnCategoryEditClose" aria-label="Close">✕</button>
         </div>
 
+        <div class="category-preview-card" id="categoryEditPreviewCard">
+          <div class="category-icon-badge" id="categoryEditPreviewBadge" style="background-color: #fed7aa;">🍔</div>
+          <div class="category-preview-meta">
+            <span class="category-preview-name" id="categoryEditPreviewName">Category Name</span>
+            <span class="category-preview-sub" id="categoryEditPreviewSub">Live preview</span>
+          </div>
+        </div>
+
         <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
           <div>
             <label
@@ -425,16 +436,31 @@
               <label id="editCategoryLimitLabel"
                 style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Monthly
                 Limit (¥)</label>
-              <input type="number" class="sheet-input-field" id="editCategoryLimit" placeholder="50000" min="0"
-                step="1000">
+              <input type="text" inputmode="decimal" class="sheet-input-field" id="editCategoryLimit" placeholder="50,000">
             </div>
           </div>
           <div>
             <label
               style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Theme
               Color</label>
-            <input type="color" class="sheet-input-field" id="editCategoryColor" value="#007AFF"
-              style="height: 44px; padding: 4px; cursor: pointer;">
+            <div class="color-palette-wrap">
+              <div class="color-swatches-grid" id="categoryColorSwatches">
+                <button type="button" class="color-swatch-btn" data-color="#fed7aa" style="background-color: #fed7aa;" aria-label="Peach"></button>
+                <button type="button" class="color-swatch-btn" data-color="#a7f3d0" style="background-color: #a7f3d0;" aria-label="Mint"></button>
+                <button type="button" class="color-swatch-btn" data-color="#bae6fd" style="background-color: #bae6fd;" aria-label="Sky"></button>
+                <button type="button" class="color-swatch-btn" data-color="#fef08a" style="background-color: #fef08a;" aria-label="Lemon"></button>
+                <button type="button" class="color-swatch-btn" data-color="#fbcfe8" style="background-color: #fbcfe8;" aria-label="Rose"></button>
+                <button type="button" class="color-swatch-btn" data-color="#ddd6fe" style="background-color: #ddd6fe;" aria-label="Lavender"></button>
+                <button type="button" class="color-swatch-btn" data-color="#fecaca" style="background-color: #fecaca;" aria-label="Coral"></button>
+                <button type="button" class="color-swatch-btn" data-color="#bfdbfe" style="background-color: #bfdbfe;" aria-label="Periwinkle"></button>
+                <button type="button" class="color-swatch-btn" data-color="#99f6e4" style="background-color: #99f6e4;" aria-label="Teal"></button>
+                <button type="button" class="color-swatch-btn" data-color="#e2e8f0" style="background-color: #e2e8f0;" aria-label="Slate"></button>
+              </div>
+              <div class="custom-color-picker-row">
+                <label for="editCategoryColor" style="font-size: 12px; color: var(--text-secondary);">Custom color</label>
+                <input type="color" class="custom-color-input" id="editCategoryColor" value="#fed7aa">
+              </div>
+            </div>
           </div>
         </div>
 
@@ -451,6 +477,14 @@
         <div class="sheet-header">
           <h3 class="sheet-title" id="savingsGoalModalTitle">Create Savings Goal</h3>
           <button class="sheet-close-btn" id="btnSavingsGoalClose" aria-label="Close">✕</button>
+        </div>
+
+        <div class="category-preview-card" id="goalEditPreviewCard">
+          <div class="category-icon-badge" id="goalEditPreviewBadge" style="background-color: #bae6fd;">🎯</div>
+          <div class="category-preview-meta">
+            <span class="category-preview-name" id="goalEditPreviewName">Goal Name</span>
+            <span class="category-preview-sub" id="goalEditPreviewSub">Live preview</span>
+          </div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
@@ -473,8 +507,7 @@
               <label id="goalInputTargetLabel"
                 style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Target
                 Amount (¥)</label>
-              <input type="number" class="sheet-input-field" id="goalInputTarget" placeholder="300000" min="0"
-                step="1000">
+              <input type="text" inputmode="decimal" class="sheet-input-field" id="goalInputTarget" placeholder="300,000">
             </div>
           </div>
           <div>
@@ -487,8 +520,24 @@
             <label
               style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Theme
               Color</label>
-            <input type="color" class="sheet-input-field" id="goalInputColor" value="#007AFF"
-              style="height: 44px; padding: 4px; cursor: pointer;">
+            <div class="color-palette-wrap">
+              <div class="color-swatches-grid" id="goalColorSwatches">
+                <button type="button" class="color-swatch-btn" data-color="#fed7aa" style="background-color: #fed7aa;" aria-label="Peach"></button>
+                <button type="button" class="color-swatch-btn" data-color="#a7f3d0" style="background-color: #a7f3d0;" aria-label="Mint"></button>
+                <button type="button" class="color-swatch-btn" data-color="#bae6fd" style="background-color: #bae6fd;" aria-label="Sky"></button>
+                <button type="button" class="color-swatch-btn" data-color="#fef08a" style="background-color: #fef08a;" aria-label="Lemon"></button>
+                <button type="button" class="color-swatch-btn" data-color="#fbcfe8" style="background-color: #fbcfe8;" aria-label="Rose"></button>
+                <button type="button" class="color-swatch-btn" data-color="#ddd6fe" style="background-color: #ddd6fe;" aria-label="Lavender"></button>
+                <button type="button" class="color-swatch-btn" data-color="#fecaca" style="background-color: #fecaca;" aria-label="Coral"></button>
+                <button type="button" class="color-swatch-btn" data-color="#bfdbfe" style="background-color: #bfdbfe;" aria-label="Periwinkle"></button>
+                <button type="button" class="color-swatch-btn" data-color="#99f6e4" style="background-color: #99f6e4;" aria-label="Teal"></button>
+                <button type="button" class="color-swatch-btn" data-color="#e2e8f0" style="background-color: #e2e8f0;" aria-label="Slate"></button>
+              </div>
+              <div class="custom-color-picker-row">
+                <label for="goalInputColor" style="font-size: 12px; color: var(--text-secondary);">Custom color</label>
+                <input type="color" class="custom-color-input" id="goalInputColor" value="#bae6fd">
+              </div>
+            </div>
           </div>
         </div>
 
@@ -515,7 +564,7 @@
           <div>
             <label id="savingsWithdrawAmountLabel"
               style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Withdrawal Amount (¥)</label>
-            <input type="number" class="sheet-input-field" id="inputWithdrawAmount" placeholder="0" min="1" step="any">
+            <input type="text" inputmode="decimal" class="sheet-input-field" id="inputWithdrawAmount" placeholder="10,000">
           </div>
           <div>
             <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Date</label>

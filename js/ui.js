@@ -17,8 +17,8 @@
   'use strict';
 
   // Dependencies assumed on global/window: BudgetStore, BudgetCalculations
-  const Store = () => window.BudgetStore;
-  const Calc = () => window.BudgetCalculations;
+  const Store = () => (typeof window !== 'undefined' && window.BudgetStore ? window.BudgetStore : (typeof BudgetStore !== 'undefined' ? BudgetStore : null));
+  const Calc = () => (typeof window !== 'undefined' && window.BudgetCalculations ? window.BudgetCalculations : (typeof BudgetCalculations !== 'undefined' ? BudgetCalculations : null));
 
   /**
    * Displays a brief toast notification on screen
@@ -189,7 +189,7 @@
   /**
    * Renders Category Budget Cards with Live Consumption Bars (Focal Feature)
    */
-  function renderCategoryCards(monthKey, containerId = 'categoryCardsContainer', onCategoryTap = null) {
+  function renderCategoryCards(monthKey, containerId = 'categoryCardsContainer', onCategoryTap = null, reorderMode = false, onMoveCategory = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -207,7 +207,7 @@
       return;
     }
 
-    const cardsHtml = categories.map(cat => {
+    const cardsHtml = categories.map((cat, index) => {
       const status = Calc().getCategoryBudgetStatus(cat, transactions, monthKey);
       const spentStr = Calc().formatCurrency(status.spent);
       const limitStr = Calc().formatCurrency(status.limit);
@@ -223,11 +223,18 @@
         remainingText = `<span class="category-remaining-text danger">+${remainingStr} over budget!</span>`;
       }
 
+      const reorderControls = reorderMode ? `
+        <div class="reorder-controls-col">
+          <button type="button" class="reorder-arrow-btn" data-move-up="${cat.id}" ${index === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+          <button type="button" class="reorder-arrow-btn" data-move-down="${cat.id}" ${index === categories.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+        </div>
+      ` : '';
+
       return `
-        <div class="category-budget-card" data-category-id="${cat.id}">
+        <div class="category-budget-card ${reorderMode ? 'reorder-mode-active' : ''}" data-category-id="${cat.id}">
           <div class="category-card-top">
             <div class="category-info-left">
-              <div class="category-icon-badge" style="background-color: ${cat.color || '#007AFF'}20; color: ${cat.color || '#007AFF'};">
+              <div class="category-icon-badge" style="background-color: ${cat.color || '#fed7aa'};">
                 ${cat.icon || '🏷️'}
               </div>
               <div class="category-name-wrap">
@@ -237,8 +244,11 @@
                 </span>
               </div>
             </div>
-            <div class="category-badge-percent ${status.status}">
-              ${status.percent}%
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="category-badge-percent ${status.status}">
+                ${status.percent}%
+              </div>
+              ${reorderControls}
             </div>
           </div>
 
@@ -256,8 +266,22 @@
 
     container.innerHTML = `<div class="categories-grid">${cardsHtml}</div>`;
 
-    // Attach click listeners to cards to quickly open add-modal for that category
-    if (typeof onCategoryTap === 'function') {
+    if (reorderMode) {
+      if (typeof onMoveCategory === 'function') {
+        container.querySelectorAll('[data-move-up]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onMoveCategory(btn.getAttribute('data-move-up'), 'up');
+          });
+        });
+        container.querySelectorAll('[data-move-down]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onMoveCategory(btn.getAttribute('data-move-down'), 'down');
+          });
+        });
+      }
+    } else if (typeof onCategoryTap === 'function') {
       container.querySelectorAll('.category-budget-card').forEach(card => {
         card.addEventListener('click', () => {
           const catId = card.getAttribute('data-category-id');
@@ -377,7 +401,7 @@
   /**
    * Renders Savings Goal Cards with live progress and action buttons
    */
-  function renderSavingsGoals(monthKey, containerId = 'savingsGoalsContainer', onDeposit = null, onWithdraw = null, onEdit = null, onDelete = null) {
+  function renderSavingsGoals(monthKey, containerId = 'savingsGoalsContainer', onDeposit = null, onWithdraw = null, onEdit = null, onDelete = null, reorderMode = false, onMoveGoal = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -395,7 +419,7 @@
       return;
     }
 
-    const cardsHtml = goals.map(goal => {
+    const cardsHtml = goals.map((goal, index) => {
       const progress = Calc().getGoalProgress(goal, records);
       const savedStr = Calc().formatCurrency(progress.totalSaved);
       const targetStr = Calc().formatCurrency(progress.targetAmount);
@@ -423,11 +447,18 @@
         paceHtml = `<div class="goal-pace-badge completed">🎉 Target Reached!</div>`;
       }
 
+      const reorderControls = reorderMode ? `
+        <div class="reorder-controls-col">
+          <button type="button" class="reorder-arrow-btn" data-goal-move-up="${goal.id}" ${index === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+          <button type="button" class="reorder-arrow-btn" data-goal-move-down="${goal.id}" ${index === goals.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+        </div>
+      ` : '';
+
       return `
-        <div class="savings-goal-card" data-goal-id="${goal.id}">
+        <div class="savings-goal-card ${reorderMode ? 'reorder-mode-active' : ''}" data-goal-id="${goal.id}">
           <div class="goal-card-top">
             <div class="goal-info-left">
-              <div class="goal-icon-badge" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">
+              <div class="goal-icon-badge" style="background-color: ${goal.color || '#bae6fd'};">
                 ${goal.icon || '🎯'}
               </div>
               <div class="goal-name-wrap">
@@ -437,8 +468,11 @@
                 </span>
               </div>
             </div>
-            <div class="goal-badge-percent" style="background-color: ${goal.color || '#007AFF'}18; color: ${goal.color || '#007AFF'};">
-              ${progress.percent}%
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="goal-badge-percent" style="background-color: ${goal.color || '#007AFF'}18; color: ${goal.color || '#007AFF'};">
+                ${progress.percent}%
+              </div>
+              ${reorderControls}
             </div>
           </div>
 
@@ -464,6 +498,21 @@
     }).join('');
 
     container.innerHTML = `<div class="savings-goals-grid">${cardsHtml}</div>`;
+
+    if (reorderMode && typeof onMoveGoal === 'function') {
+      container.querySelectorAll('[data-goal-move-up]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-goal-move-up'), 'up');
+        });
+      });
+      container.querySelectorAll('[data-goal-move-down]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-goal-move-down'), 'down');
+        });
+      });
+    }
 
     if (typeof onDeposit === 'function') {
       container.querySelectorAll('[data-deposit-goal]').forEach(btn => {
@@ -505,7 +554,7 @@
   /**
    * Renders the Savings Goals snapshot on the Dashboard
    */
-  function renderDashboardSavingsSnapshot(monthKey, containerId = 'dashboardSavingsContainer', onDeposit = null, onViewAll = null) {
+  function renderDashboardSavingsSnapshot(monthKey, containerId = 'dashboardSavingsContainer', onDeposit = null, onViewAll = null, reorderMode = false, onMoveGoal = null) {
     const container = document.getElementById(containerId);
     const headerEl = document.getElementById('dashboardSavingsHeader');
     if (!container) return;
@@ -521,21 +570,31 @@
 
     if (headerEl) headerEl.style.display = 'flex';
 
-    const itemsHtml = goals.map(goal => {
+    const itemsHtml = goals.map((goal, index) => {
       const progress = Calc().getGoalProgress(goal, records);
       const savedStr = Calc().formatCurrency(progress.totalSaved);
       const targetStr = Calc().formatCurrency(progress.targetAmount);
       const fillWidth = Math.min(progress.percent, 100);
 
+      const reorderControls = reorderMode ? `
+        <div class="reorder-controls-col">
+          <button type="button" class="reorder-arrow-btn" data-dash-move-up="${goal.id}" ${index === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+          <button type="button" class="reorder-arrow-btn" data-dash-move-down="${goal.id}" ${index === goals.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+        </div>
+      ` : '';
+
       return `
-        <div class="dashboard-savings-card" data-goal-id="${goal.id}">
+        <div class="dashboard-savings-card ${reorderMode ? 'reorder-mode-active' : ''}" data-goal-id="${goal.id}">
           <div class="dash-goal-top">
-            <span class="dash-goal-icon" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">${goal.icon || '🎯'}</span>
+            <span class="dash-goal-icon" style="background-color: ${goal.color || '#bae6fd'};">${goal.icon || '🎯'}</span>
             <div class="dash-goal-title-wrap">
               <span class="dash-goal-name">${escapeHtml(goal.name)}</span>
               <span class="dash-goal-fraction">${savedStr} / ${targetStr}</span>
             </div>
-            <button type="button" class="dash-goal-deposit-btn" data-dash-deposit="${goal.id}">+ Deposit</button>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button type="button" class="dash-goal-deposit-btn" data-dash-deposit="${goal.id}">+ Deposit</button>
+              ${reorderControls}
+            </div>
           </div>
           <div class="dash-goal-progress-track">
             <div class="dash-goal-progress-fill" style="width: ${fillWidth}%; background-color: ${goal.color || '#007AFF'};"></div>
@@ -545,6 +604,21 @@
     }).join('');
 
     container.innerHTML = `<div class="dashboard-savings-grid">${itemsHtml}</div>`;
+
+    if (reorderMode && typeof onMoveGoal === 'function') {
+      container.querySelectorAll('[data-dash-move-up]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-dash-move-up'), 'up');
+        });
+      });
+      container.querySelectorAll('[data-dash-move-down]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveGoal(btn.getAttribute('data-dash-move-down'), 'down');
+        });
+      });
+    }
 
     if (typeof onDeposit === 'function') {
       container.querySelectorAll('[data-dash-deposit]').forEach(btn => {
@@ -613,7 +687,7 @@
           return `
             <div class="transaction-row savings-record-row" data-savings-id="${t.id}">
               <div class="transaction-left">
-                <div class="transaction-icon" style="background-color: ${goal.color || '#007AFF'}20; color: ${goal.color || '#007AFF'};">
+                <div class="transaction-icon" style="background-color: ${goal.color || '#bae6fd'};">
                   ${goal.icon || '🏦'}
                 </div>
                 <div class="transaction-details">
@@ -638,7 +712,7 @@
         return `
           <div class="transaction-row" data-transaction-id="${t.id}">
             <div class="transaction-left">
-              <div class="transaction-icon" style="background-color: ${cat.color}20; color: ${cat.color};">
+              <div class="transaction-icon" style="background-color: ${cat.color || '#fed7aa'};">
                 ${cat.icon}
               </div>
               <div class="transaction-details">
@@ -689,9 +763,40 @@
   }
 
   /**
+   * Renders the Total Limits Hero Card in the Categories tab
+   */
+  function renderLimitsHeroCard(containerId = 'limitsHeroCardContainer') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const categories = (Store() && Store().getCategories) ? Store().getCategories() : [];
+    const totalLimit = categories.reduce((sum, cat) => sum + (Number(cat.limit) || 0), 0);
+    const totalLimitFormatted = Calc() ? Calc().formatCurrency(totalLimit) : totalLimit;
+    const count = categories.length;
+    const avgLimit = count > 0 ? (totalLimit / count) : 0;
+    const avgLimitFormatted = Calc() ? Calc().formatCurrency(avgLimit) : avgLimit;
+
+    container.innerHTML = `
+      <div class="limits-hero-card">
+        <div class="limits-hero-top">
+          <div>
+            <div class="limits-hero-label">Total Monthly Budget Limit</div>
+            <div class="limits-hero-amount">${totalLimitFormatted}</div>
+          </div>
+          <div class="limits-hero-badge">${count} ${count === 1 ? 'Category' : 'Categories'}</div>
+        </div>
+        <div class="limits-hero-sub">
+          <span>Average per category:</span>
+          <span style="font-weight: 600; color: var(--text-primary);">${avgLimitFormatted} / mo</span>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
    * Renders Category Manager Screen (Set & Edit Monthly Budget Limits)
    */
-  function renderCategoriesManager(containerId = 'categoriesManagerContainer', onEdit = null, onDelete = null) {
+  function renderCategoriesManager(containerId = 'categoriesManagerContainer', onEdit = null, onDelete = null, reorderMode = false, onMoveCategory = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -707,12 +812,19 @@
         </div>
       `;
     } else {
-      const itemsHtml = categories.map(cat => {
+      const itemsHtml = categories.map((cat, index) => {
         const limitFormatted = Calc().formatCurrency(cat.limit);
+        const reorderControls = reorderMode ? `
+          <div class="reorder-controls-col">
+            <button type="button" class="reorder-arrow-btn" data-move-up="${cat.id}" ${index === 0 ? 'disabled' : ''} aria-label="Move Up">▲</button>
+            <button type="button" class="reorder-arrow-btn" data-move-down="${cat.id}" ${index === categories.length - 1 ? 'disabled' : ''} aria-label="Move Down">▼</button>
+          </div>
+        ` : '';
+
         return `
-          <div class="category-manager-item" data-id="${cat.id}">
+          <div class="category-manager-item ${reorderMode ? 'reorder-mode-active' : ''}" data-id="${cat.id}">
             <div class="category-manager-left">
-              <div class="category-icon-badge" style="background-color: ${cat.color}20; color: ${cat.color};">
+              <div class="category-icon-badge" style="background-color: ${cat.color || '#fed7aa'};">
                 ${cat.icon}
               </div>
               <div>
@@ -720,7 +832,8 @@
                 <div style="font-size: 12px; color: var(--text-secondary);">Monthly Budget</div>
               </div>
             </div>
-            <div class="category-manager-right">
+            <div class="category-manager-right" style="display: flex; align-items: center; gap: 8px;">
+              ${reorderControls}
               <button class="category-manager-limit" data-edit-id="${cat.id}" title="Edit Category Limit">
                 ${limitFormatted} ✎
               </button>
@@ -738,6 +851,21 @@
       ${listHtml}
       <button class="add-category-btn" id="btnOpenAddCategoryModal" style="margin-top: 12px;">+ Add New Category</button>
     `;
+
+    if (reorderMode && typeof onMoveCategory === 'function') {
+      container.querySelectorAll('[data-move-up]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveCategory(btn.getAttribute('data-move-up'), 'up');
+        });
+      });
+      container.querySelectorAll('[data-move-down]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMoveCategory(btn.getAttribute('data-move-down'), 'down');
+        });
+      });
+    }
 
     if (typeof onEdit === 'function') {
       container.querySelectorAll('.category-manager-limit').forEach(btn => {
@@ -780,6 +908,7 @@
     renderSavingsGoals,
     renderDashboardSavingsSnapshot,
     renderHistory,
+    renderLimitsHeroCard,
     renderCategoriesManager,
     escapeHtml
   };

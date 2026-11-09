@@ -16,6 +16,7 @@ if (typeof load === 'function') {
   load('js/numpad.js');
   load('js/ocr-engine.js');
   load('js/receipt-parser.js');
+  load('js/ui.js');
 } else if (typeof require === 'function') {
   // Node.js environment
   global.BudgetCalculations = require('./js/calculations.js');
@@ -25,9 +26,11 @@ if (typeof load === 'function') {
   global.BudgetNumpad = require('./js/numpad.js');
   global.BudgetOCR = require('./js/ocr-engine.js');
   global.ReceiptParser = require('./js/receipt-parser.js');
+  global.BudgetUI = require('./js/ui.js');
   Object.assign(global, global.BudgetCalculations);
   Object.assign(global, global.BudgetStore);
   Object.assign(global, global.ReceiptParser);
+  Object.assign(global, global.BudgetUI);
 }
 
 let passed = 0;
@@ -371,6 +374,51 @@ test('Numpad accepts large amounts for JPY (up to 99,999,999)', () => {
   // Enter 1,500,000 (1.5 million yen)
   '1500000'.split('').forEach(d => numpad.pressDigit(d));
   assertEquals(numpad.getNumericValue(), 1500000, 'Should allow 1,500,000 yen');
+});
+
+test('Numpad comma formatting for thousands, millions, and decimals', () => {
+  let displayed = '';
+  let numeric = 0;
+  let raw = '';
+  const numpad = new BudgetNumpad.NumpadController({
+    onAmountChange: (disp, num, r) => {
+      displayed = disp;
+      numeric = num;
+      raw = r;
+    }
+  });
+
+  // Test typing 1000 -> 1,000
+  '1000'.split('').forEach(d => numpad.pressDigit(d));
+  assertEquals(displayed, '1,000', 'Display should format 1000 as 1,000');
+  assertEquals(numpad.getDisplayString(), '1,000', 'getDisplayString() should return 1,000');
+  assertEquals(numeric, 1000, 'Numeric value should be 1000');
+  assertEquals(raw, '1000', 'Raw buffer should be 1000');
+
+  // Test typing 1500000 -> 1,500,000
+  numpad.reset();
+  '1500000'.split('').forEach(d => numpad.pressDigit(d));
+  assertEquals(displayed, '1,500,000', 'Display should format 1500000 as 1,500,000');
+  assertEquals(numpad.getDisplayString(), '1,500,000', 'getDisplayString() should return 1,500,000');
+  assertEquals(numeric, 1500000, 'Numeric value should be 1500000');
+
+  // Test typing 2450.75 -> 2,450.75
+  numpad.reset();
+  '2450'.split('').forEach(d => numpad.pressDigit(d));
+  assertEquals(displayed, '2,450', 'Display should format 2450 as 2,450');
+  numpad.pressDecimal();
+  assertEquals(displayed, '2,450.', 'Display should preserve trailing decimal point 2,450.');
+  numpad.pressDigit('7');
+  assertEquals(displayed, '2,450.7', 'Display should format 2,450.7');
+  numpad.pressDigit('5');
+  assertEquals(displayed, '2,450.75', 'Display should format 2,450.75');
+  assertEquals(numpad.getDisplayString(), '2,450.75', 'getDisplayString() should return 2,450.75');
+  assertEquals(numeric, 2450.75, 'Numeric value should be 2450.75');
+
+  // Direct helper test
+  assertEquals(BudgetNumpad.formatWithCommas('1000'), '1,000', 'formatWithCommas(1000)');
+  assertEquals(BudgetNumpad.formatWithCommas('1500000'), '1,500,000', 'formatWithCommas(1500000)');
+  assertEquals(BudgetNumpad.formatWithCommas('2450.75'), '2,450.75', 'formatWithCommas(2450.75)');
 });
 
 test('getMonthsWithTransactions returns sorted list of months with activity', () => {
@@ -935,7 +983,7 @@ test('Receipt scanning PWA integration: index.html, CSS, sw.js, and app.js wirin
   assert(css.includes('.action-sheet-option-btn'), 'components.css defines action sheet option buttons');
 
   // 3. sw.js checks
-  assert(/CACHE_VERSION\s*=\s*'v[67]'/.test(sw), 'sw.js CACHE_VERSION defined');
+  assert(/CACHE_VERSION\s*=\s*'v[0-9]+'/.test(sw), 'sw.js CACHE_VERSION defined');
   assert(sw.includes("'./js/ocr-engine.js'"), 'sw.js precaches ocr-engine.js');
   assert(sw.includes("'./js/receipt-parser.js'"), 'sw.js precaches receipt-parser.js');
   assert(sw.includes('cdn.jsdelivr.net') && sw.includes('tessdata'), 'sw.js includes cache-first runtime caching for OCR assets');
@@ -1261,6 +1309,383 @@ test('Savings Feature PWA UI integration: index.html, components.css, and app.js
   assert(app.includes('addSavingsRecord'), 'app.js records savings deposits/withdrawals');
   assert(app.includes('renderSavingsGoals'), 'app.js renders savings goals');
   assert(app.includes('renderDashboardSavingsSnapshot'), 'app.js renders dashboard savings snapshot');
+});
+
+test('Header UI: btnHeaderAction (+ Add) is removed from index.html header', () => {
+  const getFileContent = (path) => {
+    if (typeof read === 'function') return read(path);
+    if (typeof readFile === 'function') return readFile(path);
+    if (typeof require === 'function') return require('fs').readFileSync(path, 'utf8');
+    return '';
+  };
+
+  const html = getFileContent('index.html');
+  assert(!html.includes('id="btnHeaderAction"'), 'index.html should not contain id="btnHeaderAction"');
+  assert(!html.includes('class="header-action-btn"'), 'index.html should not contain class="header-action-btn"');
+  assert(html.includes('<header class="app-header">'), 'index.html should retain app-header');
+  assert(html.includes('<h1 class="app-title">Budget Tracker</h1>'), 'index.html should retain app-title');
+});
+
+test('Limits Hero Card: Total limit calculation, DOM structure, and UI integration', () => {
+  BudgetStore.resetToDefaultData();
+  const categories = BudgetStore.getCategories();
+  assert(categories.length > 0, 'Categories exist');
+
+  const expectedTotalLimit = categories.reduce((sum, cat) => sum + (Number(cat.limit) || 0), 0);
+  const expectedTotalFormatted = BudgetCalculations.formatCurrency(expectedTotalLimit);
+  const expectedAvgLimit = categories.length > 0 ? (expectedTotalLimit / categories.length) : 0;
+  const expectedAvgFormatted = BudgetCalculations.formatCurrency(expectedAvgLimit);
+
+  // Mock DOM container
+  const mockContainer = { innerHTML: '' };
+  const prevDoc = typeof globalThis.document !== 'undefined' ? globalThis.document : undefined;
+  globalThis.document = {
+    getElementById: (id) => {
+      if (id === 'limitsHeroCardContainer') return mockContainer;
+      return null;
+    }
+  };
+
+  try {
+    BudgetUI.renderLimitsHeroCard('limitsHeroCardContainer');
+
+    assert(mockContainer.innerHTML.includes('limits-hero-card'), 'Rendered HTML contains limits-hero-card');
+    assert(mockContainer.innerHTML.includes('limits-hero-top'), 'Rendered HTML contains limits-hero-top');
+    assert(mockContainer.innerHTML.includes('limits-hero-label'), 'Rendered HTML contains limits-hero-label');
+    assert(mockContainer.innerHTML.includes('Total Monthly Budget Limit'), 'Rendered HTML contains Total Monthly Budget Limit label');
+    assert(mockContainer.innerHTML.includes('limits-hero-amount'), 'Rendered HTML contains limits-hero-amount');
+    assert(mockContainer.innerHTML.includes(expectedTotalFormatted), 'Rendered HTML displays correct formatted total limit: ' + expectedTotalFormatted);
+    assert(mockContainer.innerHTML.includes('limits-hero-badge'), 'Rendered HTML contains limits-hero-badge');
+    const badgeText = `${categories.length} ${categories.length === 1 ? 'Category' : 'Categories'}`;
+    assert(mockContainer.innerHTML.includes(badgeText), 'Rendered HTML displays category count badge: ' + badgeText);
+    assert(mockContainer.innerHTML.includes('limits-hero-sub'), 'Rendered HTML contains limits-hero-sub');
+    assert(mockContainer.innerHTML.includes(expectedAvgFormatted), 'Rendered HTML displays average per category: ' + expectedAvgFormatted);
+  } finally {
+    globalThis.document = prevDoc;
+  }
+
+  // File integration checks
+  const getFileContent = (path) => {
+    if (typeof read === 'function') return read(path);
+    if (typeof readFile === 'function') return readFile(path);
+    if (typeof require === 'function') return require('fs').readFileSync(path, 'utf8');
+    return '';
+  };
+
+  const html = getFileContent('index.html');
+  const css = getFileContent('css/components.css');
+  const app = getFileContent('js/app.js');
+
+  assert(html.includes('id="limitsHeroCardContainer"'), 'index.html contains limitsHeroCardContainer');
+  assert(css.includes('.limits-hero-card'), 'components.css defines .limits-hero-card');
+  assert(css.includes('.limits-hero-top'), 'components.css defines .limits-hero-top');
+  assert(css.includes('.limits-hero-label'), 'components.css defines .limits-hero-label');
+  assert(css.includes('.limits-hero-amount'), 'components.css defines .limits-hero-amount');
+  assert(css.includes('.limits-hero-badge'), 'components.css defines .limits-hero-badge');
+  assert(css.includes('.limits-hero-sub'), 'components.css defines .limits-hero-sub');
+  assert(app.includes("renderLimitsHeroCard('limitsHeroCardContainer')"), 'app.js calls renderLimitsHeroCard on categories view');
+});
+
+test('Bottom navigation tab order in index.html matches dashboard < history < savings < categories < settings', () => {
+  const getFileContent = (path) => {
+    if (typeof read === 'function') return read(path);
+    if (typeof readFile === 'function') return readFile(path);
+    if (typeof require === 'function') return require('fs').readFileSync(path, 'utf8');
+    return '';
+  };
+
+  const html = getFileContent('index.html');
+  const bottomBarMatch = html.match(/<nav class="bottom-tab-bar">([\s\S]*?)<\/nav>/);
+  assert(bottomBarMatch, 'index.html contains .bottom-tab-bar nav element');
+
+  const navContent = bottomBarMatch[1];
+  const tabRegex = /data-tab="([^"]+)"/g;
+  const tabOrder = [];
+  let match;
+  while ((match = tabRegex.exec(navContent)) !== null) {
+    tabOrder.push(match[1]);
+  }
+
+  const expectedOrder = ['dashboard', 'history', 'savings', 'categories', 'settings'];
+  assertEquals(JSON.stringify(tabOrder), JSON.stringify(expectedOrder), 'Bottom tab bar items order matches: ' + expectedOrder.join(' -> '));
+
+  // Also verify relative index positions in HTML string
+  const posDashboard = navContent.indexOf('data-tab="dashboard"');
+  const posHistory = navContent.indexOf('data-tab="history"');
+  const posSavings = navContent.indexOf('data-tab="savings"');
+  const posCategories = navContent.indexOf('data-tab="categories"');
+  const posSettings = navContent.indexOf('data-tab="settings"');
+
+  assert(posDashboard !== -1, 'data-tab="dashboard" found in bottom tab bar');
+  assert(posHistory !== -1, 'data-tab="history" found in bottom tab bar');
+  assert(posSavings !== -1, 'data-tab="savings" found in bottom tab bar');
+  assert(posCategories !== -1, 'data-tab="categories" found in bottom tab bar');
+  assert(posSettings !== -1, 'data-tab="settings" found in bottom tab bar');
+
+  assert(posDashboard < posHistory, 'dashboard must precede history');
+  assert(posHistory < posSavings, 'history must precede savings');
+  assert(posSavings < posCategories, 'savings must precede categories');
+  assert(posCategories < posSettings, 'categories must precede settings');
+});
+
+test('WYSIWYG Category & Savings Goal Customization: Soft pastel palette, live preview cards, and swatch controls', () => {
+  const getFileContent = (path) => {
+    if (typeof read === 'function') return read(path);
+    if (typeof readFile === 'function') return readFile(path);
+    if (typeof require === 'function') return require('fs').readFileSync(path, 'utf8');
+    return '';
+  };
+
+  // 1. BudgetStore default pastel hex codes verification
+  BudgetStore.resetToDefaultData();
+  const cats = BudgetStore.getCategories();
+  const expectedPastels = {
+    'cat_dining': '#fed7aa',
+    'cat_groceries': '#a7f3d0',
+    'cat_transport': '#bae6fd',
+    'cat_bills': '#fef08a',
+    'cat_shopping': '#fbcfe8',
+    'cat_entertainment': '#ddd6fe',
+    'cat_health': '#fecaca',
+    'cat_personal': '#bfdbfe',
+    'cat_education': '#99f6e4',
+    'cat_misc': '#e2e8f0'
+  };
+
+  for (const [id, color] of Object.entries(expectedPastels)) {
+    const cat = cats.find(c => c.id === id);
+    assert(cat !== undefined, `Category ${id} must exist in default categories`);
+    assertEquals(cat.color, color, `Category ${id} must use soft pastel hex ${color}`);
+  }
+
+  // 2. ui.js opacity suffix elimination
+  const uiJs = getFileContent('js/ui.js');
+  assert(!uiJs.includes('${cat.color}20'), 'ui.js should not append 20 opacity suffix to cat.color');
+  assert(!uiJs.includes('${cat.color || \'#007AFF\'}20'), 'ui.js should not append 20 opacity suffix to cat.color with fallback');
+  assert(!uiJs.includes('${goal.color || \'#007AFF\'}20'), 'ui.js should not append 20 opacity suffix to goal.color');
+  assert(uiJs.includes('${cat.color || \'#fed7aa\'}'), 'ui.js uses direct cat.color with pastel fallback');
+  assert(uiJs.includes('${goal.color || \'#bae6fd\'}'), 'ui.js uses direct goal.color with pastel fallback');
+
+  // 3. index.html DOM elements
+  const html = getFileContent('index.html');
+  assert(html.includes('id="categoryEditPreviewCard"'), 'index.html contains categoryEditPreviewCard');
+  assert(html.includes('id="categoryEditPreviewBadge"'), 'index.html contains categoryEditPreviewBadge');
+  assert(html.includes('id="categoryEditPreviewName"'), 'index.html contains categoryEditPreviewName');
+  assert(html.includes('id="categoryEditPreviewSub"'), 'index.html contains categoryEditPreviewSub');
+  assert(html.includes('id="categoryColorSwatches"'), 'index.html contains categoryColorSwatches');
+
+  assert(html.includes('id="goalEditPreviewCard"'), 'index.html contains goalEditPreviewCard');
+  assert(html.includes('id="goalEditPreviewBadge"'), 'index.html contains goalEditPreviewBadge');
+  assert(html.includes('id="goalEditPreviewName"'), 'index.html contains goalEditPreviewName');
+  assert(html.includes('id="goalEditPreviewSub"'), 'index.html contains goalEditPreviewSub');
+  assert(html.includes('id="goalColorSwatches"'), 'index.html contains goalColorSwatches');
+
+  // Verify all 10 curated pastel swatches are present in category swatches grid
+  const pastelColors = [
+    '#fed7aa', '#a7f3d0', '#bae6fd', '#fef08a', '#fbcfe8',
+    '#ddd6fe', '#fecaca', '#bfdbfe', '#99f6e4', '#e2e8f0'
+  ];
+  for (const c of pastelColors) {
+    assert(html.includes(`data-color="${c}"`), `index.html swatches must contain swatch with data-color="${c}"`);
+  }
+
+  // 4. css/components.css rules
+  const css = getFileContent('css/components.css');
+  assert(css.includes('.category-preview-card'), 'components.css defines .category-preview-card');
+  assert(css.includes('.category-preview-meta'), 'components.css defines .category-preview-meta');
+  assert(css.includes('.category-preview-name'), 'components.css defines .category-preview-name');
+  assert(css.includes('.category-preview-sub'), 'components.css defines .category-preview-sub');
+  assert(css.includes('.color-palette-wrap'), 'components.css defines .color-palette-wrap');
+  assert(css.includes('.color-swatches-grid'), 'components.css defines .color-swatches-grid');
+  assert(css.includes('.color-swatch-btn'), 'components.css defines .color-swatch-btn');
+  assert(css.includes('.color-swatch-btn.selected'), 'components.css defines .color-swatch-btn.selected');
+  assert(css.includes('.custom-color-picker-row'), 'components.css defines .custom-color-picker-row');
+  assert(css.includes('.custom-color-input'), 'components.css defines .custom-color-input');
+
+  // 5. js/app.js wiring
+  const appJs = getFileContent('js/app.js');
+  assert(appJs.includes('updateCategoryLivePreview'), 'app.js defines updateCategoryLivePreview');
+  assert(appJs.includes('updateGoalLivePreview'), 'app.js defines updateGoalLivePreview');
+  assert(appJs.includes('setSelectedSwatch'), 'app.js defines setSelectedSwatch');
+  assert(appJs.includes('categoryColorSwatches'), 'app.js wires categoryColorSwatches');
+  assert(appJs.includes('goalColorSwatches'), 'app.js wires goalColorSwatches');
+});
+
+test('Automatic migration for legacy default category colors to pastel Theme Colors', () => {
+  // Simulate an existing browser that previously initialized categories with legacy vibrant colors
+  const legacyCats = [
+    { id: 'cat_dining', name: 'Dining', icon: '🍔', limit: 40000, color: '#f97316' },
+    { id: 'cat_groceries', name: 'Groceries', icon: '🛒', limit: 50000, color: '#10b981' },
+    { id: 'cat_transport', name: 'Transport', icon: '🚇', limit: 15000, color: '#06b6d4' },
+    { id: 'cat_bills', name: 'Bills & Utilities', icon: '⚡', limit: 30000, color: '#eab308' },
+    { id: 'cat_shopping', name: 'Shopping', icon: '🛍️', limit: 20000, color: '#ec4899' },
+    { id: 'cat_entertainment', name: 'Entertainment', icon: '🎬', limit: 15000, color: '#8b5cf6' },
+    { id: 'cat_health', name: 'Health & Wellness', icon: '💊', limit: 10000, color: '#ef4444' },
+    { id: 'cat_personal', name: 'Personal Care', icon: '💈', limit: 10000, color: '#3b82f6' },
+    { id: 'cat_education', name: 'Education', icon: '📚', limit: 10000, color: '#14b8a6' },
+    { id: 'cat_misc', name: 'Miscellaneous', icon: '📦', limit: 10000, color: '#64748b' },
+    { id: 'cat_custom', name: 'Custom Cat', icon: '⭐', limit: 5000, color: '#123456' }
+  ];
+
+  BudgetStore.importDataJSON({ categories: legacyCats });
+
+  // Calling getCategories() triggers the auto-migration
+  const migrated = BudgetStore.getCategories();
+  assertEquals(migrated.length, 11, 'All 11 categories should remain');
+
+  const expectedColors = {
+    'cat_dining': '#fed7aa',
+    'cat_groceries': '#a7f3d0',
+    'cat_transport': '#bae6fd',
+    'cat_bills': '#fef08a',
+    'cat_shopping': '#fbcfe8',
+    'cat_entertainment': '#ddd6fe',
+    'cat_health': '#fecaca',
+    'cat_personal': '#bfdbfe',
+    'cat_education': '#99f6e4',
+    'cat_misc': '#e2e8f0',
+    'cat_custom': '#123456' // Custom non-legacy color is preserved
+  };
+
+  for (const [id, color] of Object.entries(expectedColors)) {
+    const c = migrated.find(item => item.id === id);
+    assert(c !== undefined, `Category ${id} should exist`);
+    assertEquals(c.color, color, `Category ${id} color should be migrated to ${color}`);
+  }
+
+  // Restore defaults for subsequent tests
+  BudgetStore.resetToDefaultData();
+});
+
+test('Category reordering in BudgetStore: saveCategoriesOrder & moveCategory with boundary clamping', () => {
+  BudgetStore.resetToDefaultData();
+  const initialCats = BudgetStore.getCategories();
+  assert(initialCats.length >= 2, 'Must have at least 2 default categories');
+  const firstId = initialCats[0].id;
+  const secondId = initialCats[1].id;
+  const lastId = initialCats[initialCats.length - 1].id;
+
+  // 1. Boundary clamping: moving index 0 'up' should not change order
+  let res = BudgetStore.moveCategory(firstId, 'up');
+  assertEquals(res[0].id, firstId, 'Moving first category up should be boundary clamped at index 0');
+
+  // 2. Move index 0 'down' -> secondId becomes index 0, firstId becomes index 1
+  res = BudgetStore.moveCategory(firstId, 'down');
+  assertEquals(res[0].id, secondId, 'Second category should now be at index 0');
+  assertEquals(res[1].id, firstId, 'First category should now be at index 1');
+
+  // 3. Move firstId back 'up'
+  res = BudgetStore.moveCategory(firstId, 'up');
+  assertEquals(res[0].id, firstId, 'First category moved back up to index 0');
+
+  // 4. Boundary clamping: moving last index 'down' should not change order
+  res = BudgetStore.moveCategory(lastId, 'down');
+  assertEquals(res[res.length - 1].id, lastId, 'Moving last category down should be boundary clamped at last index');
+
+  // 5. Invalid inputs handling
+  res = BudgetStore.moveCategory('nonexistent_id', 'up');
+  assertEquals(res.length, initialCats.length, 'Non-existent ID does not mutate length');
+  res = BudgetStore.moveCategory(firstId, 'invalid_dir');
+  assertEquals(res[0].id, firstId, 'Invalid direction leaves list unchanged');
+
+  // 6. saveCategoriesOrder reorders explicitly
+  const reversedIds = initialCats.map(c => c.id).reverse();
+  const reordered = BudgetStore.saveCategoriesOrder(reversedIds);
+  assertEquals(reordered[0].id, reversedIds[0], 'First item matches reversed order');
+  assertEquals(reordered[reordered.length - 1].id, reversedIds[reversedIds.length - 1], 'Last item matches reversed order');
+
+  // 7. saveCategoriesOrder preserves unlisted categories at the end
+  const partialIds = [firstId, secondId];
+  const partialResult = BudgetStore.saveCategoriesOrder(partialIds);
+  assertEquals(partialResult[0].id, firstId, 'firstId at index 0');
+  assertEquals(partialResult[1].id, secondId, 'secondId at index 1');
+  assertEquals(partialResult.length, initialCats.length, 'All unlisted categories preserved at the end');
+
+  // Reset
+  BudgetStore.resetToDefaultData();
+});
+
+test('Savings Goals reordering in BudgetStore: saveSavingsGoalsOrder & moveSavingsGoal with boundary clamping', () => {
+  BudgetStore.resetToDefaultData();
+
+  // Create 3 test goals
+  const goal1 = BudgetStore.saveSavingsGoal({ name: 'Goal Alpha', targetAmount: 10000 });
+  const goal2 = BudgetStore.saveSavingsGoal({ name: 'Goal Beta', targetAmount: 20000 });
+  const goal3 = BudgetStore.saveSavingsGoal({ name: 'Goal Gamma', targetAmount: 30000 });
+
+  const initialGoals = BudgetStore.getSavingsGoals();
+  assert(initialGoals.length >= 3, 'Must have 3 savings goals');
+  const g1Id = goal1.id;
+  const g2Id = goal2.id;
+  const g3Id = goal3.id;
+
+  // 1. Boundary clamping: index 0 moving up
+  let res = BudgetStore.moveSavingsGoal(g1Id, 'up');
+  assertEquals(res[0].id, g1Id, 'Moving first goal up should be clamped');
+
+  // 2. Move index 0 down
+  res = BudgetStore.moveSavingsGoal(g1Id, 'down');
+  assertEquals(res[0].id, g2Id, 'Goal Beta should now be at index 0');
+  assertEquals(res[1].id, g1Id, 'Goal Alpha should now be at index 1');
+
+  // 3. Move last goal down -> boundary clamp
+  res = BudgetStore.moveSavingsGoal(g3Id, 'down');
+  assertEquals(res[res.length - 1].id, g3Id, 'Moving last goal down should be clamped');
+
+  // 4. Move last goal up
+  res = BudgetStore.moveSavingsGoal(g3Id, 'up');
+  const g3Idx = res.findIndex(g => g.id === g3Id);
+  assertEquals(g3Idx, res.length - 2, 'Goal Gamma moved up by 1 position');
+
+  // 5. saveSavingsGoalsOrder with full array
+  const customOrder = [g3Id, g1Id, g2Id];
+  res = BudgetStore.saveSavingsGoalsOrder(customOrder);
+  assertEquals(res[0].id, g3Id, 'First goal is Gamma');
+  assertEquals(res[1].id, g1Id, 'Second goal is Alpha');
+  assertEquals(res[2].id, g2Id, 'Third goal is Beta');
+
+  // 6. saveSavingsGoalsOrder with partial array preserves unlisted
+  res = BudgetStore.saveSavingsGoalsOrder([g2Id]);
+  assertEquals(res[0].id, g2Id, 'First goal is Beta');
+  assertEquals(res.length, 3, 'All 3 goals preserved');
+
+  // Cleanup
+  BudgetStore.deleteSavingsGoal(g1Id);
+  BudgetStore.deleteSavingsGoal(g2Id);
+  BudgetStore.deleteSavingsGoal(g3Id);
+});
+
+test('Feature 2 PWA Reordering UI contracts: index.html, components.css, ui.js, app.js', () => {
+  const getFile = (file) => {
+    if (typeof read === 'function') return read(file);
+    if (typeof require === 'function') return require('fs').readFileSync(file, 'utf8');
+    return '';
+  };
+
+  const html = getFile('index.html');
+  assert(html.includes('id="btnToggleReorderDashboardCategories"'), 'index.html has btnToggleReorderDashboardCategories');
+  assert(html.includes('id="btnToggleReorderDashboardSavings"'), 'index.html has btnToggleReorderDashboardSavings');
+  assert(html.includes('id="btnToggleReorderLimitsTab"'), 'index.html has btnToggleReorderLimitsTab');
+  assert(html.includes('id="btnToggleReorderSavingsTab"'), 'index.html has btnToggleReorderSavingsTab');
+
+  const css = getFile('css/components.css');
+  assert(css.includes('.reorder-toggle-btn'), 'components.css defines .reorder-toggle-btn');
+  assert(css.includes('.reorder-controls-col'), 'components.css defines .reorder-controls-col');
+  assert(css.includes('.reorder-arrow-btn'), 'components.css defines .reorder-arrow-btn');
+  assert(css.includes('.reorder-mode-active'), 'components.css defines .reorder-mode-active');
+
+  const uiJs = getFile('js/ui.js');
+  assert(uiJs.includes('onMoveCategory'), 'ui.js supports onMoveCategory callback');
+  assert(uiJs.includes('onMoveGoal'), 'ui.js supports onMoveGoal callback');
+  assert(uiJs.includes('reorderMode'), 'ui.js supports reorderMode parameter');
+
+  const appJs = getFile('js/app.js');
+  assert(appJs.includes('isReorderingDashboardCategories'), 'app.js tracks isReorderingDashboardCategories');
+  assert(appJs.includes('isReorderingDashboardSavings'), 'app.js tracks isReorderingDashboardSavings');
+  assert(appJs.includes('isReorderingLimitsCategories'), 'app.js tracks isReorderingLimitsCategories');
+  assert(appJs.includes('isReorderingTabSavings'), 'app.js tracks isReorderingTabSavings');
+  assert(appJs.includes('setupReorderingControls'), 'app.js defines setupReorderingControls');
+  assert(appJs.includes('resetReorderStates'), 'app.js defines resetReorderStates');
 });
 
 log('\n-----------------------------------------');
